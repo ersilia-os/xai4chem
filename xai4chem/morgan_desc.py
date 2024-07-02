@@ -44,7 +44,7 @@ class MorganFingerprint(object):
 
     def fit(self, smiles):
         X = morgan_featurizer(smiles)
-        self.features = ["fp-{0}".format(i+1) for i in range(X.shape[1])]
+        self.features = ["fp-{0}".format(i) for i in range(X.shape[1])]
         return pd.DataFrame(X, columns=self.features)
 
     def transform(self, smiles):

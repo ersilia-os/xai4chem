@@ -1,7 +1,7 @@
 {
-    "Mean Squared Error": 0.5966,
-    "Root Mean Squared Error": 0.7724,
-    "Mean Absolute Error": 0.5576,
-    "R-squared Score": 0.5498,
-    "Explained Variance Score": 0.5498
+    "Mean Squared Error": 0.423,
+    "Root Mean Squared Error": 0.6504,
+    "Mean Absolute Error": 0.4678,
+    "R-squared Score": 0.6808,
+    "Explained Variance Score": 0.6815
 }

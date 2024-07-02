@@ -32,23 +32,24 @@ if __name__ == "__main__":
     y_valid.reset_index(drop=True, inplace=True)
 
     # Instantiate the descriptor class
-    descriptor = DatamolDescriptor(discretize=False)
+    descriptor = MorganFingerprint()
 
     descriptor.fit(smiles_train)
 
     # Transform the data 
-    smiles_train_transformed = descriptor.transform(smiles_train)
-    smiles_valid_transformed = descriptor.transform(smiles_valid)
+    train_features = descriptor.transform(smiles_train)
+    valid_features= descriptor.transform(smiles_valid)
 
     # Instantiate the regressor
     regressor = Regressor(output_folder, algorithm='xgboost')
     
     # Train the model 
-    regressor.fit(smiles_train_transformed, y_train) 
+    regressor.fit(train_features, y_train) 
 
     # Evaluate model
-    regressor.evaluate(smiles_valid, smiles_valid_transformed, y_valid)
+    regressor.evaluate(valid_features, smiles_valid, y_valid)
 
     # Explain the model     
-    regressor.explain(smiles_train_transformed, smiles_train)
+    regressor.explain(train_features, smiles_list=smiles_train, use_fingerprints=True)
+    
     
