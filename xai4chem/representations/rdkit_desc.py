@@ -83,7 +83,7 @@ def rdkitclassical_featurizer(smiles_list):
     return pd.DataFrame(R, columns=[x[0] for x in Descriptors._descList])
 
 
-class RDkitClassicalDescriptor:
+class RDKitDescriptor:
     def __init__(self, max_na=0.1, discretize=True, n_bins=5, kbd_strategy='quantile'):
         """
         Parameters:

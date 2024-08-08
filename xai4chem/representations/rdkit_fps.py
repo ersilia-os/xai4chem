@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import joblib
 from rdkit.Chem import rdFingerprintGenerator
 from sklearn.feature_selection import VarianceThreshold
 
@@ -50,3 +51,10 @@ class RDKitFingerprint(object):
     def transform(self, smiles):
         X = rdkit_featurizer(smiles)
         return pd.DataFrame(X, columns=self.features)
+    
+    def save(self, file_name):
+        joblib.dump(self, file_name)
+        
+    @classmethod
+    def load(cls, file_name):
+        return joblib.load(file_name)

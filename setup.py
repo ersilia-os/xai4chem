@@ -20,6 +20,9 @@ setup(
     python_requires=">=3.10",
     install_requires=install_requires,
     packages=find_packages(exclude=("utilities")),
+    py_modules=['cmd'],
+    entry_points={'console_scripts': ['xai4chem = xai4chem.cli:cli',],
+    },
     classifiers=[  
         "Programming Language :: Python :: 3.10", 
         "License :: OSI Approved :: GNU General Public License v3 (GPLv3)",

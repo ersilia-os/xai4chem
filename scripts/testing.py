@@ -6,12 +6,8 @@ from sklearn.model_selection import train_test_split
 root = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.join(root, "..", "xai4chem"))
 
-from datamol_desc import DatamolDescriptor
-from rdkitclassical_desc import RDkitClassicalDescriptor
-from mordred_desc import MordredDescriptor
-from regressor import Regressor
-from morgan_fps import MorganFingerprint
-from rdkit_fps import  RDKitFingerprint
+from representations import DatamolDescriptor, RDKitDescriptor, MordredDescriptor, MorganFingerprint, RDKitFingerprint
+from supervised import Regressor, Classifier
 
 output_folder = os.path.join(root, "..", "results")
 
@@ -21,8 +17,9 @@ if __name__ == "__main__":
 
     # Extract SMILES and target values
     smiles = data["smiles"]
-    target = data["pchembl_value"]
-
+    target = data["pchembl_value"]#regression #(data["uM_value"] <= 2).astype(int)#classification
+    # print(target.value_counts())#classification
+    
     # Split data into training and test sets
     smiles_train, smiles_valid, y_train, y_valid = train_test_split(smiles, target, test_size=0.2, random_state=42)
 
@@ -41,16 +38,15 @@ if __name__ == "__main__":
     train_features = descriptor.transform(smiles_train)
     valid_features= descriptor.transform(smiles_valid)
 
-    # Instantiate the regressor
-    regressor = Regressor(output_folder, algorithm='xgboost')
+    # Instantiate the Regressor/Classifier
+    trainer = Regressor(output_folder, fingerprint='rdkit', k=100)#fingerprints='morgan' if MorganFingerprint
     
     # Train the model 
-    regressor.fit(train_features, y_train) 
+    trainer.fit(train_features, y_train) 
 
     # Evaluate model
-    regressor.evaluate(valid_features, smiles_valid, y_valid)
+    trainer.evaluate(valid_features, smiles_valid, y_valid)
 
     # Explain the model     
-    regressor.explain(train_features, smiles_list=smiles_train, fingerprints='rdkit')
-    
+    trainer.explain(train_features, smiles_list=smiles_train)    
     

@@ -17,14 +17,20 @@ _MIN_PATH_LEN = 1
 _MAX_PATH_LEN = 7 
 
 
-def explain_model(model, X, smiles_list, output_folder, fingerprints='morgan'):
+def explain_model(model, X, smiles_list, output_folder, fingerprints=None):
+    print('Explaining model')
     create_output_folder(output_folder)
 
     explainer = shap.TreeExplainer(model)
     explanation = explainer(X)
 
+    #Samples
+    predictions = model.predict_proba(X)[:, 1] if hasattr(model, 'predict_proba') else model.predict(X) 
     percentiles = [0, 25, 50, 75, 100]
-    sample_indices = np.percentile(range(X.shape[0]), percentiles).astype(int)
+    percentile_values = np.percentile(predictions, percentiles)
+
+    # Indices of the predictions closest to the percentile values
+    sample_indices = [np.argmin(np.abs(predictions - value)) for value in percentile_values]
 
     for i, idx in enumerate(sample_indices):
         smiles = smiles_list[idx] if smiles_list is not None else f'Sample {idx}'
@@ -34,7 +40,7 @@ def explain_model(model, X, smiles_list, output_folder, fingerprints='morgan'):
     plot_summary_plots(explanation, output_folder)
     plot_scatter_plots(explanation, X.columns, output_folder)
 
-    if smiles_list is not None:
+    if smiles_list is not None and fingerprints is not None:
         for i, idx in enumerate(sample_indices):
             smiles = smiles_list[idx]
             mol = Chem.MolFromSmiles(smiles)

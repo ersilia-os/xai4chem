@@ -5,6 +5,7 @@ from sklearn.feature_selection import VarianceThreshold
 from mordred import Calculator, descriptors
 from rdkit import Chem
 import pandas as pd
+import joblib
 
 MAX_NA = 0.2
 
@@ -117,3 +118,10 @@ class MordredDescriptor(object):
         X = self.imputer.transform(X)
         X = self.variance_filter.transform(X)
         return pd.DataFrame(X, columns=self.features)
+    
+    def save(self, file_name):
+        joblib.dump(self, file_name)
+        
+    @classmethod
+    def load(cls, file_name):
+        return joblib.load(file_name)
