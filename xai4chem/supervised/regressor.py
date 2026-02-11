@@ -49,18 +49,15 @@ class Regressor:
 
     def _optimize_xgboost(self, trial, X, y):
         params = {
-            'lambda': trial.suggest_int('lambda', 0, 5),
-            'alpha': trial.suggest_int('alpha', 0, 5),
-            'gamma': trial.suggest_int('gamma', 0, 20),
-            'learning_rate': trial.suggest_float('learning_rate', 0.0001, 1),
-            'colsample_bytree': trial.suggest_categorical('colsample_bytree', [0.4, 0.5, 0.6, 0.7, 0.8, 1.0]),
-            'colsample_bynode': trial.suggest_categorical('colsample_bynode', [0.4, 0.5, 0.6, 0.7, 0.8, 1.0]),
+            'lambda': trial.suggest_int('lambda', 0, 1.0),
+            'alpha': trial.suggest_int('alpha', 0, 1.0),
+            'gamma': trial.suggest_int('gamma', 0, 1.0),
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.5),
             'n_estimators': trial.suggest_int('n_estimators', 50, 200),
-            'min_child_weight': trial.suggest_int('min_child_weight', 1, 100),
-            'max_depth': trial.suggest_int('max_depth', 3, 20),
+            'min_child_weight': trial.suggest_int('min_child_weight', 1, 5),
+            'max_depth': trial.suggest_int('max_depth', 3, 8),
             'subsample': trial.suggest_categorical('subsample', [0.4, 0.5, 0.6, 0.7, 0.8, 1.0]),
             'random_state': trial.suggest_categorical('random_state', [0, 42]),
-            'early_stopping_rounds': 10
         }
 
         model = xgboost.XGBRegressor(**params)
@@ -89,6 +86,9 @@ class Regressor:
         print('Best parameters for XGBoost:', best_params)
         self.model = xgboost.XGBRegressor(**best_params)
         self.model.fit(X_train.values, y_train)
+
+        y_pred = self.model.predict(X_train.values)
+        assert max(y_pred) - min(y_pred) > 0.05, "Insufficicient variation between highest and lowest prediction scores."
 
     def evaluate(self, X_valid_features, smiles_valid, y_valid):
         if self.model is None:
