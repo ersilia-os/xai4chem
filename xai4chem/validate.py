@@ -3,14 +3,13 @@
 import time
 
 import numpy as np
-from scipy.stats import spearmanr
 
 from xai4chem.console import STEP_COLORS, console, echo, elapsed, rule, set_active_color, summary_panel
 from xai4chem.console import path as cpath
 from xai4chem.io import match_hard_columns, read_labels
 from xai4chem.model import XAIModel
 from xai4chem.run import write_json
-from xai4chem.soft import fidelity, forward
+from xai4chem.soft import fidelity, forward, safe_spearman
 
 
 def _hard_metrics(y, pred):
@@ -22,7 +21,7 @@ def _hard_metrics(y, pred):
             "auprc": float(average_precision_score(y, pred)),
             "n": int(len(y)),
         }
-    return {"spearman": float(spearmanr(y, pred).statistic), "n": int(len(y))}
+    return {"spearman": safe_spearman(y, pred), "n": int(len(y))}
 
 
 def validate(model_dir, soft_labels=None, hard_labels=None, output=None):

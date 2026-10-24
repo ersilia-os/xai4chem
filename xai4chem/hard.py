@@ -23,7 +23,6 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
-from scipy.stats import spearmanr
 
 from xai4chem.console import (
     STEP_COLORS,
@@ -51,7 +50,7 @@ from xai4chem.run import (
     write_json,
 )
 from xai4chem.similarity import binarize, fingerprints, nearest
-from xai4chem.soft import contributions, dmatrix, load_features, n_threads, predict_margin
+from xai4chem.soft import contributions, dmatrix, load_features, n_threads, predict_margin, safe_spearman
 
 # Same constants as Olinda (olinda/tanimoto.py): absolute Tanimoto knees, a ceiling that always keeps a
 # third of the surrogate, and a dead zone below which the hard head is not mixed in at all.
@@ -128,7 +127,7 @@ def train_hard_model(X, y, task, sparse, seed):
         cv = {"auroc": float(roc_auc_score(y, oof))}
     else:
         cv = {
-            "spearman": float(spearmanr(y, oof).statistic),
+            "spearman": safe_spearman(y, oof),
             "r2": float(1 - ((y - oof) ** 2).sum() / ((y - y.mean()) ** 2).sum()),
         }
     cv["folds"] = CV_FOLDS

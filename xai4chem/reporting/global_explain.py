@@ -17,7 +17,6 @@ import time
 import numpy as np
 import pandas as pd
 from rich.markup import escape
-from scipy.stats import spearmanr
 
 from xai4chem.console import STEP_COLORS, LiveTable, elapsed, rule, set_active_color, summary_panel
 from xai4chem.console import path as cpath
@@ -25,7 +24,7 @@ from xai4chem.library import ReferenceLibrary
 from xai4chem.model import XAIModel
 from xai4chem.run import EXPLAIN_DIRNAME, FIDELITY_NAME, write_json
 from xai4chem.similarity import nearest
-from xai4chem.soft import contributions
+from xai4chem.soft import contributions, safe_spearman
 
 CHUNK = 5000
 PLOT_ROWS = 2000
@@ -202,7 +201,7 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
                 figs_h = draw_global_figures(out, "hs", np.vstack(plot_phi), np.vstack(plot_X), imp_h, dir_h, labels)
                 imp_s = abs_s / max(acc_h.n, 1)
                 used = (imp_s > 0) | (imp_h > 0)
-                rho = float(spearmanr(imp_s[used], imp_h[used]).statistic) if used.sum() > 2 else float("nan")
+                rho = safe_spearman(imp_s[used], imp_h[used])
                 T_panel, _ = nearest(panel_fps, hh.labelled_fps)
                 _hard_figures(hh, np.concatenate(h_all), T_panel, out)
                 summary["hard"] = {

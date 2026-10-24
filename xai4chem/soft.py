@@ -210,6 +210,21 @@ def _progress_callback(update, total):
     return ProgressCallback()
 
 
+def safe_spearman(a, b):
+    """Spearman's ρ, or NaN (quietly) when it is undefined: fewer than 3 points, or a constant input."""
+    a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
+    if len(a) < 3 or np.ptp(a) == 0 or np.ptp(b) == 0:
+        return float("nan")
+    return float(spearmanr(a, b).statistic)
+
+
+def safe_pearson(a, b):
+    a, b = np.asarray(a, dtype=np.float64), np.asarray(b, dtype=np.float64)
+    if len(a) < 3 or np.ptp(a) == 0 or np.ptp(b) == 0:
+        return float("nan")
+    return float(np.corrcoef(a, b)[0, 1])
+
+
 def fidelity(y_true, y_pred):
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
@@ -217,8 +232,8 @@ def fidelity(y_true, y_pred):
     ss_tot = float(((y_true - y_true.mean()) ** 2).sum())
     return {
         "r2": 1 - ss_res / ss_tot if ss_tot > 0 else float("nan"),
-        "pearson": float(np.corrcoef(y_true, y_pred)[0, 1]) if len(y_true) > 1 else float("nan"),
-        "spearman": float(spearmanr(y_true, y_pred).statistic) if len(y_true) > 1 else float("nan"),
+        "pearson": safe_pearson(y_true, y_pred),
+        "spearman": safe_spearman(y_true, y_pred),
         "rmse": float(np.sqrt(ss_res / max(len(y_true), 1))),
         "n": int(len(y_true)),
     }
@@ -351,6 +366,8 @@ def learn_soft(
                 continue
             t = choose_transform(y, transform)
             z = forward(y[mask], t)
+            if np.ptp(z) == 0:
+                echo(f"[{name}] the teacher's output is constant; S will be too, and explain nothing", "warning")
             Z[mask, j] = z
             Xm = X[np.where(mask)[0]] if not mask.all() else X
             table.update(name, Scale=t, Rows=f"{int(mask.sum()):,}")
@@ -459,4 +476,4 @@ def _stability(X, z, sparse, booster, seed, n_estimators, val_frac, params, upda
     a = np.abs(contributions(booster, X[idx], sparse)[:, :-1]).mean(0)
     b = np.abs(contributions(other, X[idx], sparse)[:, :-1]).mean(0)
     used = (a > 0) | (b > 0)
-    return float(spearmanr(a[used], b[used]).statistic)
+    return safe_spearman(a[used], b[used])
