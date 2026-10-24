@@ -39,9 +39,9 @@ One row per feature, sorted by importance:
 
 - `predictions.csv` has one row per molecule. Per column:
   - `<column>`: P on the teacher's scale
-  - `<column>_S`: S on the model scale
+  - `<column>_S`: S, on the teacher's scale like every value here (as in `predict --details`)
   - with a hard head:
-    - `_HS`, `_T`, `_a`
+    - `_HS` (H_S, teacher scale), `_T`, `_a`
     - `_nearest_smiles` and `_nearest_label`
     - `_agreement`: the cosine of φ_S and φ_HS, from −1 (opposite) to 1 (same story)
 
