@@ -162,3 +162,7 @@ cython_debug/
 # Reference-library data (versioned with eosvc, not git)
 data/
 access.json
+
+# Example inputs and outputs
+example/data/
+example/results/

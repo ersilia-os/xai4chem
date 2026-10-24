@@ -21,7 +21,7 @@ from xai4chem.cli.commands._training import run_soft, soft_options
 @click.option("--force", is_flag=True, help="Overwrite an existing model directory.")
 @options.friendly_errors
 def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, report, force, **kwargs):
-    """Run the whole pipeline: learn-soft → [learn-hard] → explain-global → report.
+    """Run the whole pipeline: learn-soft → (learn-hard) → explain-global → report.
 
     The model directory holds everything `explain`, `predict` and `report` need.
     """

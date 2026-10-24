@@ -47,6 +47,10 @@ What `setup` reuses and computes:
   otherwise the file is downloaded (2.9 GB).
 - **AccFG and datamol features** are computed locally, once (about 6 and 13 minutes on 8 cores).
 
+With an Ersilia Model Hub model as the teacher, `ersilia serve <model-id>` and then
+`ersilia run -i erl0_smiles.csv -o soft.csv` writes soft labels in a format xai4chem reads directly: the
+`key` column is ignored and `input` is taken as the SMILES.
+
 The input files:
 
 - **Soft labels:** a `smiles` (or `input`) column plus one numeric column per teacher output.

@@ -84,7 +84,7 @@ def beeswarm(ax, stylia, phi, X, labels, top=12, seed=0):
         span = x.max() - x.min()
         c = (x - x.min()) / span if span > 0 else np.full(len(x), 0.5)
         jitter = rng.uniform(-0.3, 0.3, len(x))
-        ax.scatter(phi[:, f], row + jitter, c=cmap(c), s=4, linewidths=0, rasterized=True)
+        ax.scatter(phi[:, f], row + jitter, c=cmap(c), s=stylia.get_markersize("small"), linewidths=0, rasterized=True)
     ax.axvline(0, color=_article(stylia, "silver"), zorder=0)
     ax.set_yticks(np.arange(len(order)))
     ax.set_yticklabels([_short(labels[i]) for i in order])

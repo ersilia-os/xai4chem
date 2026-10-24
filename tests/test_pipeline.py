@@ -160,6 +160,9 @@ def test_commands(fitted):
     run(["predict", "-m", model_dir, "-i", root / "q.csv", "-o", root / f"pred_{featurizer}.csv", "--details"])
     assert len(pd.read_csv(root / f"pred_{featurizer}.csv")) == 4
     assert (model_dir / "report.html").exists()
+    for page in (out / "index.html", model_dir / "report.html"):
+        text = page.read_text()
+        assert 'src="http' not in text and '<link rel="stylesheet"' not in text  # self-contained
     run(["report", "-m", model_dir, "-o", root / f"report_{featurizer}.html"])
     run(
         [
