@@ -254,3 +254,35 @@ def test_rerunning_learn_hard_replaces_the_head(fitted, tmp_path):
     hard.to_csv(tmp_path / "few.csv", index=False)
     run(["learn-hard", "-h", tmp_path / "few.csv", "-m", copy])
     assert XAIModel(copy).column("activity").hard is None
+
+
+def test_continuous_hard_labels(library, tmp_path):
+    """Non-binary measurements give a regression H, calibrated and blended like a classifier."""
+    from .conftest import teacher
+
+    root, lib = library
+    soft = pd.read_csv(root / "soft.csv")
+    take = soft.sample(120, random_state=3)
+    hard = pd.DataFrame({"smiles": take.smiles, "noisy": teacher(take.smiles.tolist()) * 10 + 1})
+    hard.to_csv(tmp_path / "hard_continuous.csv", index=False)
+    model_dir = tmp_path / "m"
+    run(
+        [
+            "fit",
+            "-s",
+            root / "soft.csv",
+            "-h",
+            tmp_path / "hard_continuous.csv",
+            "--library-dir",
+            lib,
+            "-m",
+            model_dir,
+            "--n-estimators",
+            200,
+        ]
+    )
+    model = XAIModel(model_dir)
+    col = model.column("noisy")
+    assert col.hard is not None and col.hard.task == "continuous"
+    r = model.explain(QUERIES, columns=["noisy"])["noisy"]
+    np.testing.assert_allclose(r["phi_P"].sum(1) + r["base_P"], r["P"], atol=1e-4)
