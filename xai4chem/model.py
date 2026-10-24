@@ -202,8 +202,8 @@ class XAIModel(object):
             out[col.name] = r
         return out
 
-    def _margins_batch(self, smiles, columns):
-        X = self.featurize(smiles)
+    def _margins_batch(self, smiles, columns, X=None):
+        X = self.featurize(smiles) if X is None else X
         fps = None
         out = {}
         for col in columns:
@@ -220,29 +220,41 @@ class XAIModel(object):
             out[col.name] = r
         return out
 
-    def scores(self, smiles, columns=None, batch_size=BATCH, progress=None):
-        """S, P (and H_S, T, a) on the model's scale per column, batched, without attributions."""
+    def scores(self, smiles, columns=None, batch_size=BATCH, progress=None, n_jobs=1):
+        """S, P (and H_S, T, a) on the model's scale per column, batched, without attributions.
+
+        With ``n_jobs > 1`` batches are featurized in worker processes while the main process scores,
+        which matters for the slower featurizers (AccFG, datamol) on large inputs.
+        """
+        from xai4chem.library import _featurize_chunk, _imap
+
         smiles = list(smiles)
         cols = self._select(columns)
-        parts = []
-        for start in range(0, len(smiles), batch_size):
-            parts.append(self._margins_batch(smiles[start : start + batch_size], cols))
+        batches = [smiles[i : i + batch_size] for i in range(0, len(smiles), batch_size)]
+        cfg = self.featurizer.to_config()
+        features = (
+            _imap(_featurize_chunk, ((cfg, b) for b in batches), n_jobs) if n_jobs > 1 else (None for _ in batches)
+        )
+        parts, done = [], 0
+        for batch, X in zip(batches, features):
+            parts.append(self._margins_batch(batch, cols, X=X))
+            done += len(batch)
             if progress is not None:
-                progress(min(start + batch_size, len(smiles)))
+                progress(done)
         return (
             {c.name: {k: np.concatenate([p[c.name][k] for p in parts]) for k in parts[0][c.name]} for c in cols}
             if parts
             else {}
         )
 
-    def predict(self, smiles, columns=None, details=False, batch_size=BATCH, progress=None):
+    def predict(self, smiles, columns=None, details=False, batch_size=BATCH, progress=None, n_jobs=1):
         """One row per molecule: P on the teacher's scale per column (NaN for unparseable SMILES).
 
         With ``details``, also S and H_S (on the teacher's scale), T and a. No attributions are computed,
         so this path is cheap enough for millions of molecules.
         """
         smiles = list(smiles)
-        res = self.scores(smiles, columns=columns, batch_size=batch_size, progress=progress)
+        res = self.scores(smiles, columns=columns, batch_size=batch_size, progress=progress, n_jobs=n_jobs)
         df = pd.DataFrame({"smiles": smiles})
         for col in self._select(columns):
             r = res[col.name]

@@ -28,6 +28,7 @@ from xai4chem.soft import contributions
 
 CHUNK = 5000
 PLOT_ROWS = 2000
+MAX_LABELLED = 50000
 TOP = 25
 
 
@@ -170,22 +171,36 @@ def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
             agreement = "—"
             if col.hard is not None:
                 hh = col.hard
-                Xh = model.featurize(hh.labelled_smiles)
-                rh = model.explain(hh.labelled_smiles, X=Xh, columns=[col.name])[col.name]
+                # Chunked like the panel: a large labelled set would otherwise need several dense
+                # molecules × features arrays at once
+                lab = hh.labelled_smiles
+                if len(lab) > MAX_LABELLED:
+                    keep = np.sort(np.random.default_rng(seed).choice(len(lab), MAX_LABELLED, replace=False))
+                    lab = [lab[i] for i in keep]
                 acc_h = _Accumulator(len(names))
-                acc_h.add(Xh.astype(np.float64), rh["phi_HS"])
+                abs_s = np.zeros(len(names))
+                plot_phi, plot_X, h_all = [], [], []
+                for start in range(0, len(lab), CHUNK):
+                    chunk = lab[start : start + CHUNK]
+                    Xh = model.featurize(chunk)
+                    rh = model.explain(chunk, X=Xh, columns=[col.name])[col.name]
+                    acc_h.add(Xh.astype(np.float64), rh["phi_HS"])
+                    abs_s += np.abs(rh["phi_S"]).sum(0)
+                    h_all.append(rh["h"])
+                    room = PLOT_ROWS - sum(len(p) for p in plot_phi)
+                    if room > 0:
+                        plot_phi.append(rh["phi_HS"][:room])
+                        plot_X.append(Xh[:room].astype(np.float32))
                 tab_h = acc_h.table(names, labels, collisions)
                 tab_h.to_csv(out / "global_hs.csv", index=False)
-                imp_h = np.abs(rh["phi_HS"]).mean(0)
+                imp_h = acc_h.sabs / max(acc_h.n, 1)
                 dir_h = tab_h.set_index("feature").loc[names, "direction"].to_numpy()
-                figs_h = draw_global_figures(
-                    out, "hs", rh["phi_HS"][:PLOT_ROWS], Xh[:PLOT_ROWS].astype(np.float32), imp_h, dir_h, labels
-                )
-                imp_s = np.abs(rh["phi_S"]).mean(0)
+                figs_h = draw_global_figures(out, "hs", np.vstack(plot_phi), np.vstack(plot_X), imp_h, dir_h, labels)
+                imp_s = abs_s / max(acc_h.n, 1)
                 used = (imp_s > 0) | (imp_h > 0)
                 rho = float(spearmanr(imp_s[used], imp_h[used]).statistic) if used.sum() > 2 else float("nan")
                 T_panel, _ = nearest(panel_fps, hh.labelled_fps)
-                _hard_figures(hh, rh["h"], T_panel, out)
+                _hard_figures(hh, np.concatenate(h_all), T_panel, out)
                 summary["hard"] = {
                     **hh.meta,
                     "importance_spearman_s_vs_hs": rho,

@@ -5,38 +5,29 @@ from xai4chem.cli import options
 
 @click.command("predict")
 @options.model_dir()
-@click.option(
-    "--input",
-    "-i",
-    "input_file",
-    required=True,
-    type=click.Path(exists=True, dir_okay=False),
-    help="Molecules to score: a CSV/TSV/Parquet with a SMILES column.",
-)
+@options.molecules_input("score")
 @click.option("--output", "-o", required=True, type=click.Path(dir_okay=False), help="Output CSV.")
 @options.columns()
 @options.smiles_column()
 @click.option("--details", is_flag=True, help="Also write S, H_S, T and a per column.")
+@click.option("--n-jobs", "-j", default=1, show_default=True, type=int, help="Featurize in this many worker processes.")
 @options.friendly_errors
-def predict_cmd(model_dir, input_file, output, columns, smiles_column, details):
+def predict_cmd(model_dir, input_file, smiles_list, output, columns, smiles_column, details, n_jobs):
     """Score molecules fast, without explanations (millions of molecules are fine)."""
     import time
 
     from xai4chem.console import STEP_COLORS, elapsed, rule, set_active_color, summary_panel, sweep_progress
     from xai4chem.console import path as cpath
-    from xai4chem.io import read_table
-    from xai4chem.io import smiles_column as find_smiles
     from xai4chem.model import XAIModel
 
     started = time.time()
     color = STEP_COLORS["predict"]
     set_active_color(color)
-    df = read_table(input_file)
-    smiles = df[find_smiles(df, smiles_column)].astype(str).tolist()
+    smiles, _ = options.load_molecules(input_file, smiles_list, smiles_column)
     model = XAIModel(model_dir)
     rule("xai4chem · predict", style=color, right=f"{len(smiles):,} molecules · {cpath(model_dir)}")
     with sweep_progress("scoring", len(smiles)) as tick:
-        out = model.predict(smiles, columns=options.split(columns), details=details, progress=tick)
+        out = model.predict(smiles, columns=options.split(columns), details=details, progress=tick, n_jobs=n_jobs)
     out.to_csv(output, index=False)
     n_bad = int(out.iloc[:, 1].isna().sum()) if out.shape[1] > 1 else 0
     rows = [

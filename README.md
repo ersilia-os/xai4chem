@@ -38,6 +38,7 @@ xai4chem library -o erl0_smiles.csv              # score this file with your tea
 xai4chem fit -s soft.csv -m models/my_model      # S → explanations → HTML report
 xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
 xai4chem explain -m models/my_model -i molecules.csv -o explanations/ --open
+xai4chem predict -m models/my_model -S "CC(=O)Nc1ccc(O)cc1" -o paracetamol.csv     # quick, no file needed
 ```
 
 What `setup` reuses and computes:

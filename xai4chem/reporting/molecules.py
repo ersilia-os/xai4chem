@@ -83,7 +83,7 @@ def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=Fal
     pred.to_csv(output_dir / "predictions.csv", index=False)
     pd.DataFrame(long_rows).to_csv(output_dir / "attributions.csv", index=False)
     if gallery:
-        _write_gallery(model, cols, cards, len(smiles), output_dir / "index.html")
+        _write_gallery(model, cols, cards, len(smiles), output_dir / "index.html", pred)
         if len(smiles) > MAX_CARDS:
             echo(f"the gallery shows the first {MAX_CARDS} molecules; the CSV files have all {len(smiles):,}", "info")
     if not quiet:
@@ -157,7 +157,8 @@ def _views(model, col, r, i, mol):
 def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
     drawn = prepare(mol)
     parts = [
-        f'<div class="card molcard"><div class="head"><b>{H.esc(mol_id)}</b><span class="smi">{H.esc(smi)}</span></div>'
+        f'<div class="card molcard" id="m-{_safe(mol_id)}"><div class="head"><b>{H.esc(mol_id)}</b>'
+        f'<span class="smi">{H.esc(smi)}</span></div>'
     ]
     for col in cols:
         r = res[col.name]
@@ -208,12 +209,42 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
     return "".join(parts)
 
 
-def _write_gallery(model, cols, cards, n_total, path):
+def _overview(cols, pred, n_cards):
+    """One row per molecule with its predictions, linking to its card."""
+    headers = ["Molecule"]
+    for col in cols:
+        headers.append(col.name)
+        if col.hard is not None:
+            headers += ["a", "Agreement"]
+    rows = []
+    for k, rec in pred.iterrows():
+        link = (
+            f'<a href="#m-{_safe(rec["id"])}">{H.esc(rec["id"])}</a>'
+            if k < n_cards and rec["valid"]
+            else H.esc(rec["id"])
+        )
+        cells = [link]
+        for col in cols:
+            v = rec[col.name]
+            cells.append("—" if pd.isna(v) else f"{v:.3f}")
+            if col.hard is not None:
+                a, g = rec[f"{col.name}_a"], rec[f"{col.name}_agreement"]
+                cells.append("—" if pd.isna(a) else f"{a:.2f}")
+                cells.append("—" if pd.isna(g) else f"{g:+.2f}")
+        rows.append(cells)
+    numeric = tuple(range(1, len(headers)))
+    return H.table(headers, rows, numeric=numeric, table_id="overview")
+
+
+def _write_gallery(model, cols, cards, n_total, path, pred):
     lede = (
         f"{n_total:,} molecules explained with a {H.esc(model.featurizer.description)} surrogate. "
         "Atom colours and bars are SHAP contributions on the model's scale (logit for probability teachers)."
     )
-    body = '<div style="margin-top:16px"><input class="filter" placeholder="Filter by id or SMILES" data-target=".molcard"></div>'
+    body = H.section(
+        "Overview", _overview(cols, pred.head(2000), len(cards)), hint="predictions on the teacher's scale"
+    )
+    body += '<div style="margin-top:22px"><input class="filter" placeholder="Filter cards by id or SMILES" data-target=".molcard"></div>'
     body += "".join(cards)
     page = H.page(
         "xai4chem · explanations",

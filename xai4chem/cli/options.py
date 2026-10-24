@@ -53,3 +53,38 @@ def friendly_errors(func):
             raise click.ClickException(str(message)) from exc
 
     return wrapper
+
+
+def molecules_input(verb):
+    """``--input`` (a table) or ``--smiles`` (repeatable), one of the two."""
+
+    def decorator(func):
+        func = click.option(
+            "--smiles", "-S", "smiles_list", multiple=True, help=f"A SMILES to {verb} (repeatable), instead of --input."
+        )(func)
+        func = click.option(
+            "--input",
+            "-i",
+            "input_file",
+            default=None,
+            type=click.Path(exists=True, dir_okay=False),
+            help=f"Molecules to {verb}: a CSV/TSV/Parquet with a SMILES column.",
+        )(func)
+        return func
+
+    return decorator
+
+
+def load_molecules(input_file, smiles_list, smiles_col=None, id_col=None):
+    """(smiles, ids) from ``--input`` or ``--smiles``."""
+    if bool(input_file) == bool(smiles_list):
+        raise click.ClickException("Pass either --input or --smiles.")
+    if smiles_list:
+        return list(smiles_list), None
+    from xai4chem.io import read_table, smiles_column
+
+    df = read_table(input_file)
+    smiles = df[smiles_column(df, smiles_col)].astype(str).tolist()
+    if id_col is not None and id_col not in df.columns:
+        raise click.ClickException(f"--id-column {id_col!r} not found. Columns: {list(df.columns)}")
+    return smiles, (df[id_col].astype(str).tolist() if id_col else None)

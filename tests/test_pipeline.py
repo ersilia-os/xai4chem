@@ -177,6 +177,9 @@ def test_commands(fitted):
     val = json.loads((root / f"val_{featurizer}.json").read_text())
     assert val["activity"]["soft_S"]["r2"] > 0.5
     run(["info", "-m", model_dir])
+    run(["predict", "-m", model_dir, "-S", "CCO", "-S", "c1ccccc1O", "-o", root / f"pred2_{featurizer}.csv"])
+    assert len(pd.read_csv(root / f"pred2_{featurizer}.csv")) == 2
+    run(["explain", "-m", model_dir, "-S", "CCO", "-o", root / f"explain2_{featurizer}", "--no-gallery"])
 
 
 def test_fit_refuses_to_overwrite(fitted):

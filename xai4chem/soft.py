@@ -26,6 +26,7 @@ from xai4chem import __version__
 from xai4chem.console import (
     STEP_COLORS,
     LiveTable,
+    console,
     echo,
     elapsed,
     live_status,
@@ -176,6 +177,7 @@ def _progress_callback(update, total):
             self.best = float("inf")
             self.started = time.time()
             self.last = 0.0
+            self.last_log = time.time()
 
         def after_iteration(self, model, epoch, evals_log):
             rmse = evals_log["val"]["rmse"][-1]
@@ -193,6 +195,10 @@ def _progress_callback(update, total):
                     ),
                     detail={"round": f"{epoch + 1:,}", "val RMSE": f"{rmse:.4f}", "best": f"{self.best:.4f}"},
                 )
+            if not console.is_terminal and now - self.last_log > 30:
+                # Piped output has no live line; a milestone every 30 s shows a long fit is moving
+                self.last_log = now
+                echo(f"boosting · round {epoch + 1:,} · val RMSE {rmse:.4f} · best {self.best:.4f}", "info", sub=True)
             return False
 
     return ProgressCallback()
@@ -269,6 +275,12 @@ def learn_soft(
     set_active_color(color)
     model_dir = Path(model_dir)
     model_dir.mkdir(parents=True, exist_ok=True)
+    stale = model_dir / "columns"
+    if stale.exists():
+        # learn-soft starts a model afresh; column directories of an earlier run would otherwise linger
+        import shutil
+
+        shutil.rmtree(stale)
     library = ReferenceLibrary(library_dir)
     featurizer = library.featurizer(featurizer_name)
     smiles, Y = read_labels(soft_labels, smiles_col=smiles_col, label_cols=label_cols)
