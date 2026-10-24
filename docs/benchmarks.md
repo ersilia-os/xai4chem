@@ -49,12 +49,15 @@ On 12 marketed drugs, none of them in the library, the Morgan surrogate reaches 
 | Task | Time |
 |---|---|
 | `predict`, all 1,355,109 library molecules, AccFG model with hard head | 1 min 10 s |
-| `explain`, 12 molecules with gallery (including start-up) | ~2 s |
+| `explain`, 12 molecules with gallery (including start-up) | ~2 s without the applicability check, ~12 s with it |
+| `explain`, 1,000 molecules, AccFG with hard head, applicability check, 100-card gallery | 21 s |
 
 Notes:
 - `predict` reads the library's precomputed features for molecules found there and featurizes the rest
   in worker processes.
 - The gate's 1-NN Tanimoto uses dense BLAS blocks, 5.6× faster than a sparse product.
+- The applicability check loads the library's Morgan fingerprints once (~9 s). It then searches all
+  1.36M molecules with threaded sparse products (~4 s per 1,000 molecules).
 - Exact TreeSHAP costs ~3.6 ms per molecule for a 2,000-tree, depth-8 S. That is why global explanations
   default to 10,000 panel molecules and `explain` is meant for hundreds to thousands of molecules at a
   time.

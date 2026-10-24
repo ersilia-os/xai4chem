@@ -30,7 +30,7 @@ TOP_FEATURES = 20
 CARD_FEATURES = 7
 ABSENT_FEATURES = 3
 BATCH = 500
-MAX_CARDS = 300
+MAX_CARDS = 100
 TERMINAL_ROWS = 15
 DOMAIN_MAX = 2000
 DOMAIN_FAR = 0.3
@@ -46,7 +46,16 @@ def cosine(a, b):
 
 
 def explain_molecules(
-    model, smiles, output_dir, ids=None, columns=None, png=False, gallery=True, quiet=False, domain=None
+    model,
+    smiles,
+    output_dir,
+    ids=None,
+    columns=None,
+    png=False,
+    gallery=True,
+    quiet=False,
+    domain=None,
+    max_cards=MAX_CARDS,
 ):
     started = time.time()
     color = STEP_COLORS["explain"]
@@ -88,7 +97,7 @@ def explain_molecules(
             for i in range(stop - start):
                 if b_mols[i] is None:
                     continue
-                if gallery and len(cards) < MAX_CARDS:
+                if gallery and len(cards) < max_cards:
                     nb = _neighbour(neighbours, start + i)
                     cards.append(_card(model, cols, res, i, b_ids[i], b_smi[i], b_mols[i], X[i], labels, nb))
                 if png:
@@ -106,8 +115,11 @@ def explain_molecules(
     pd.DataFrame(long_rows).to_csv(output_dir / "attributions.csv", index=False)
     if gallery:
         _write_gallery(model, cols, cards, len(smiles), output_dir / "index.html", pred)
-        if len(smiles) > MAX_CARDS:
-            echo(f"the gallery shows the first {MAX_CARDS} molecules; the CSV files have all {len(smiles):,}", "info")
+        if len(smiles) > max_cards:
+            echo(
+                f"the gallery shows the first {max_cards} molecules (--cards); the CSV files have all {len(smiles):,}",
+                "info",
+            )
     if not quiet:
         _terminal_table(cols, pred, long_rows, sparse=model.featurizer.sparse)
         if neighbours is not None:

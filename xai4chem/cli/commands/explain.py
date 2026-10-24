@@ -19,6 +19,9 @@ from xai4chem.cli import options
 @click.option("--png", is_flag=True, help="Also write atom-highlight PNGs per molecule.")
 @click.option("--gallery/--no-gallery", default=True, show_default=True, help="Write the HTML gallery.")
 @click.option(
+    "--cards", default=100, show_default=True, type=int, help="Molecules drawn in the gallery (each adds ~90 kB)."
+)
+@click.option(
     "--domain/--no-domain",
     default=None,
     help="Find each molecule's nearest library molecule and the teacher's value for it (default: on for up to "
@@ -36,6 +39,7 @@ def explain_cmd(
     id_column,
     png,
     gallery,
+    cards,
     domain,
     open_browser,
 ):
@@ -57,6 +61,7 @@ def explain_cmd(
         png=png,
         gallery=gallery,
         domain=domain,
+        max_cards=cards,
     )
     if open_browser and gallery:
         import webbrowser

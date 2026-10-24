@@ -62,26 +62,48 @@ def nearest(queries, reference):
     return T, idx
 
 
-def nearest_large(queries, reference, block=25):
+def nearest_large(queries, reference, block=64, threads=None):
     """:func:`nearest` against a very large reference (the whole library), as reference × queries.
 
-    A sparse library times a small dense block of queries is cheap (~1 s per 50 queries against 1.36M
-    molecules), whereas transposing the library or densifying it is not.
+    The library is split into row blocks that threads multiply by a small dense block of queries (scipy
+    releases the GIL there, ~3x faster on 10 cores), and each thread reduces its block to a per-query
+    maximum, so the full library × queries matrix never exists.
     """
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+
     Q = binarize(queries)
     already_binary = sp.issparse(reference) and reference.format == "csr" and reference.dtype == np.float32
     R = reference if already_binary and (reference.nnz == 0 or reference.data.max() <= 1) else binarize(reference)
-    r_pop = np.asarray(R.sum(1), dtype=np.float32).ravel()
+    threads = threads or min(8, os.cpu_count() or 1)
+    bounds = np.linspace(0, R.shape[0], 2 * threads + 1).astype(int)
+    parts = [
+        (R[a:b], np.asarray(R[a:b].sum(1), dtype=np.float32).ravel(), a)
+        for a, b in zip(bounds[:-1], bounds[1:])
+        if b > a
+    ]
     T = np.zeros(Q.shape[0], dtype=np.float32)
     idx = np.full(Q.shape[0], -1, dtype=np.int64)
-    for start in range(0, Q.shape[0], block):
-        Qd = Q[start : start + block].toarray().T
-        inter = np.asarray(R @ Qd, dtype=np.float32)
-        union = r_pop[:, None] + Qd.sum(0)[None, :]
+
+    def best(part, Qd, q_pop):
+        Rb, r_pop, offset = part
+        inter = np.asarray(Rb @ Qd, dtype=np.float32)
+        union = r_pop[:, None] + q_pop[None, :]
         union -= inter
         np.divide(inter, union, out=inter, where=union > 0)
         inter[union <= 0] = 0.0
         j = inter.argmax(0)
-        idx[start : start + block] = j
-        T[start : start + block] = inter[j, np.arange(Qd.shape[1])]
+        return inter[j, np.arange(inter.shape[1])], j + offset
+
+    with ThreadPoolExecutor(threads) as pool:
+        for start in range(0, Q.shape[0], block):
+            Qd = Q[start : start + block].toarray().T
+            q_pop = Qd.sum(0)
+            results = list(pool.map(lambda part: best(part, Qd, q_pop), parts))
+            sims = np.stack([r[0] for r in results])
+            rows = np.stack([r[1] for r in results])
+            k = sims.argmax(0)
+            cols = np.arange(sims.shape[1])
+            T[start : start + block] = sims[k, cols]
+            idx[start : start + block] = rows[k, cols]
     return T, idx
