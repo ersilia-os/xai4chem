@@ -355,6 +355,8 @@ def resolve_file(entry, library_dir):
     if path.is_absolute() and path.exists():
         return path
     local = Path(library_dir) / path
+    if not local.exists() and path.exists():
+        return path.resolve()  # libraries written before 2.0 could record paths relative to the working directory
     if local.exists():
         return local
     if path.name == ERSILIA_LIBRARY_FILENAME:

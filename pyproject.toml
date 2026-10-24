@@ -28,6 +28,7 @@ rich          = "14.1.0"
 rich-click    = "1.9.8"
 loguru        = "0.7.3"
 psutil        = "7.0.0"
+optuna        = "4.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

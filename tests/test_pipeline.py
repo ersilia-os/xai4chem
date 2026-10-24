@@ -398,3 +398,25 @@ def test_library_is_relocatable(library, fitted, tmp_path):
     manifest = XAIModel(model_dir).manifest
     assert library_for_model(manifest, moved).dir == moved
     run(["explain-global", "-m", model_dir, "--library-dir", moved, "--max-rows", 50])
+
+
+def test_tuning(library, tmp_path):
+    root, lib = library
+    run(
+        [
+            "learn-soft",
+            "-s",
+            root / "soft.csv",
+            "--library-dir",
+            lib,
+            "-m",
+            tmp_path / "m",
+            "--tune",
+            "--trials",
+            "3",
+            "--soft-label-columns",
+            "activity",
+        ]
+    )
+    meta = json.loads((tmp_path / "m" / "columns" / "c0" / "soft_meta.json").read_text())
+    assert meta["tuned"] and "eta" in meta["params"]

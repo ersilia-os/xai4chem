@@ -9,7 +9,17 @@ COMMAND_PANELS = [
 ]
 
 
-_TRAINING = ["--featurizer", "--transform", "--max-rows", "--n-estimators", "--val-frac", "--stability", "--seed"]
+_TRAINING = [
+    "--featurizer",
+    "--transform",
+    "--max-rows",
+    "--n-estimators",
+    "--val-frac",
+    "--tune",
+    "--trials",
+    "--stability",
+    "--seed",
+]
 _SOFT = ["--soft-labels", "--soft-smiles-column", "--soft-label-columns"]
 _HARD = ["--hard-labels", "--hard-smiles-column", "--hard-label-columns"]
 OPTION_GROUPS = {

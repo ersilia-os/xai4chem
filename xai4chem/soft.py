@@ -313,6 +313,8 @@ def learn_soft(
     smiles_col=None,
     label_cols=None,
     params=None,
+    tune=False,
+    trials=20,
 ):
     started = time.time()
     color = STEP_COLORS["learn-soft"]
@@ -372,6 +374,14 @@ def learn_soft(
             Z[mask, j] = z
             Xm = X[np.where(mask)[0]] if not mask.all() else X
             table.update(name, Scale=t, Rows=f"{int(mask.sum()):,}")
+            col_params = dict(params or {})
+            if tune:
+                from xai4chem.tune import tune as run_tune
+
+                table.update(name, Time="tuning…")
+                tuned, tuned_rmse = run_tune(Xm, z, featurizer.sparse, seed=seed, trials=trials)
+                col_params.update(tuned)
+                logger.debug(f"{name}: tuned parameters {tuned} (validation RMSE {tuned_rmse:.4f})")
             with live_status() as update:
                 booster, _, val = train_booster(
                     Xm,
@@ -380,7 +390,7 @@ def learn_soft(
                     seed,
                     n_estimators=n_estimators,
                     val_frac=val_frac,
-                    params=params,
+                    params=col_params,
                     progress=update,
                 )
             pred = predict_margin(booster, Xm[val], featurizer.sparse)
@@ -397,14 +407,15 @@ def learn_soft(
                 "params": {
                     **PARAMS,
                     "min_child_weight": min_child_weight(int(mask.sum() - len(val))),
-                    **(params or {}),
+                    **col_params,
                 },
+                "tuned": bool(tune),
             }
             if stability:
                 table.update(name, Time="stability…")
                 with live_status() as update:
                     meta["stability_spearman"] = _stability(
-                        Xm, z, featurizer.sparse, booster, seed, n_estimators, val_frac, params, update
+                        Xm, z, featurizer.sparse, booster, seed, n_estimators, val_frac, col_params, update
                     )
             cdir = column_dir(model_dir, col_id)
             cdir.mkdir(parents=True, exist_ok=True)
@@ -460,6 +471,8 @@ def learn_soft(
     rows_out = [("Featurizer", featurizer.description), ("Molecules", f"{len(smiles):,}")]
     for meta in results:
         line = f"R² {meta['fidelity']['r2']:.3f} · ρ {meta['fidelity']['spearman']:.3f} · {meta['n_trees']:,} trees"
+        if meta.get("tuned"):
+            line += " · tuned"
         if "stability_spearman" in meta:
             line += f" · stability {meta['stability_spearman']:.2f}"
         rows_out.append((meta["name"], line))
