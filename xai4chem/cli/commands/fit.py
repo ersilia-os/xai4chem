@@ -17,10 +17,17 @@ from xai4chem.cli.commands._training import run_soft, soft_options
 @click.option(
     "--hard-label-columns", default=None, help="Comma-separated measurement columns (default: every numeric column)."
 )
+@click.option(
+    "--explain-rows",
+    default=10000,
+    show_default=True,
+    type=int,
+    help="Panel molecules for the global explanations (exact TreeSHAP costs a few ms each); 0 uses the whole panel.",
+)
 @click.option("--report/--no-report", default=True, show_default=True, help="Write the HTML model report at the end.")
 @click.option("--force", is_flag=True, help="Overwrite an existing model directory.")
 @options.friendly_errors
-def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, report, force, **kwargs):
+def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, report, force, **kwargs):
     """Run the whole pipeline: learn-soft → (learn-hard) → explain-global → report.
 
     The model directory holds everything `explain`, `predict` and `report` need.
@@ -57,7 +64,7 @@ def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, report, force, 
         )
     from xai4chem.reporting.global_explain import explain_global
 
-    explain_global(model_dir, library_dir=kwargs["library_dir"], seed=kwargs["seed"])
+    explain_global(model_dir, library_dir=kwargs["library_dir"], max_rows=explain_rows, seed=kwargs["seed"])
     rows = [("Pipeline", " → ".join(pipeline)), ("Model", f"[dim]{cpath(model_dir)}[/]")]
     if report:
         from xai4chem.reporting.report import write_report

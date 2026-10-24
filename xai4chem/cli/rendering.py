@@ -15,7 +15,7 @@ _HARD = ["--hard-labels", "--hard-smiles-column", "--hard-label-columns"]
 OPTION_GROUPS = {
     "fit": [
         {"name": "Inputs", "options": _SOFT + _HARD},
-        {"name": "Model", "options": ["--model-dir", "--library-dir", "--report", "--force"]},
+        {"name": "Model", "options": ["--model-dir", "--library-dir", "--explain-rows", "--report", "--force"]},
         {"name": "Training", "options": _TRAINING},
     ],
     "learn-soft": [
