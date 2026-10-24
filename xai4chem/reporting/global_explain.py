@@ -28,6 +28,9 @@ from xai4chem.soft import contributions
 
 CHUNK = 5000
 PLOT_ROWS = 2000
+# Exact TreeSHAP costs a few milliseconds per molecule for a full-size S (2,000 depth-8 trees), so global
+# statistics use the first 10,000 panel molecules by default: ~40 s, and importances are stable well before
+GLOBAL_ROWS = 10000
 MAX_LABELLED = 50000
 TOP = 25
 
@@ -99,14 +102,14 @@ def draw_global_figures(out, prefix, phi_plot, X_plot, importance, direction, la
     return paths
 
 
-def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
+def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
     started = time.time()
     color = STEP_COLORS["explain-global"]
     set_active_color(color)
     model = XAIModel(model_dir)
     library = ReferenceLibrary(library_dir or model.manifest["library"]["dir"])
     rows = library.panel()
-    if max_rows is not None:
+    if max_rows:
         rows = rows[:max_rows]
     rule(
         "xai4chem · explain-global",

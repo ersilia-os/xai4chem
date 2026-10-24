@@ -26,7 +26,8 @@ from xai4chem.reporting.drawing import atom_attributions, atom_png, atom_svg, pr
 from xai4chem.soft import inverse
 
 TOP_FEATURES = 20
-CARD_FEATURES = 8
+CARD_FEATURES = 7
+ABSENT_FEATURES = 3
 BATCH = 500
 MAX_CARDS = 300
 TERMINAL_ROWS = 15
@@ -192,8 +193,15 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
                 '<div class="legend"><span style="--c:var(--crimson)">raises the prediction</span><span style="--c:var(--cobalt)">lowers it</span></div>'
             )
         phi = r["phi_P"][i]
-        top = np.argsort(-np.abs(phi))[:CARD_FEATURES]
-        items = [(("" if x_row[f] > 0 else "absent · ") + labels[f], float(phi[f])) for f in top if phi[f] != 0]
+        # Present features first: they are what a chemist can act on. Absent ones are listed apart, briefly
+        order = np.argsort(-np.abs(phi))
+        present = [f for f in order if x_row[f] > 0 and phi[f] != 0][:CARD_FEATURES]
+        absent = [f for f in order if x_row[f] == 0 and phi[f] != 0][:ABSENT_FEATURES]
+        scale = max([abs(float(phi[f])) for f in present + absent] or [1.0])
+        bars = H.contributions([(labels[f], float(phi[f])) for f in present], scale=scale)
+        if absent and model.featurizer.sparse:
+            bars += '<div class="faint" style="font-size:11px;margin:8px 0 4px">Strongest absent features</div>'
+            bars += H.contributions([(labels[f], float(phi[f])) for f in absent], scale=scale)
         side = ""
         if hard:
             j = int(r["nearest"][i])
@@ -206,7 +214,7 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
         note = ""
         if views is not None and abs(views[1]) > 1e-3:
             note = f'<p class="faint" style="font-size:11.5px">Absent features contribute {views[1]:+.3f}; they have no atoms to sit on.</p>'
-        parts.append(f'<div class="split"><div>{H.contributions(items)}</div><div>{side}{note}</div></div>')
+        parts.append(f'<div class="split"><div>{bars}</div><div>{side}{note}</div></div>')
     parts.append("</div>")
     return "".join(parts)
 
