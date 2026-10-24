@@ -40,6 +40,9 @@ Training uses Olinda's tuned defaults:
 - row subsampling 0.8, column subsampling 0.5
 - a `min_child_weight` that grows with the data and reaches 200 at about a million rows
 
+`--tune` runs a short Optuna search first: 20 trials on a 100k-row subsample, covering the learning rate,
+depth and row/column subsampling. `min_child_weight` stays tied to the full data size.
+
 Morgan and AccFG counts are passed as sparse matrices whose zeros are *missing*. For a count feature,
 "absent" and "missing" are the same split, and training only touches the ~3% of entries that are nonzero.
 
