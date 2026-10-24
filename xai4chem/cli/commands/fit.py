@@ -3,6 +3,10 @@ import rich_click as click
 from xai4chem.cli import options
 from xai4chem.cli.commands._training import run_soft, soft_options
 
+QUICK_ROWS = 200_000
+QUICK_TREES = 500
+QUICK_EXPLAIN = 2000
+
 
 @click.command("fit")
 @soft_options
@@ -26,8 +30,13 @@ from xai4chem.cli.commands._training import run_soft, soft_options
 )
 @click.option("--report/--no-report", default=True, show_default=True, help="Write the HTML model report at the end.")
 @click.option("--force", is_flag=True, help="Overwrite an existing model directory.")
+@click.option(
+    "--quick",
+    is_flag=True,
+    help="Fast iteration preset: at most 200k soft labels, 500 trees, 2,000 panel molecules (fidelity drops).",
+)
 @options.friendly_errors
-def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, report, force, **kwargs):
+def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, report, force, quick, **kwargs):
     """Run the whole pipeline: learn-soft → (learn-hard) → explain-global → report.
 
     The model directory holds everything `explain`, `predict` and `report` need.
@@ -40,6 +49,10 @@ def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, r
     from xai4chem.console import path as cpath
 
     started = time.time()
+    if quick:
+        kwargs["max_rows"] = min(kwargs["max_rows"] or QUICK_ROWS, QUICK_ROWS)
+        kwargs["n_estimators"] = min(kwargs["n_estimators"], QUICK_TREES)
+        explain_rows = min(explain_rows or QUICK_EXPLAIN, QUICK_EXPLAIN)
     model_dir = Path(kwargs["model_dir"])
     if (model_dir / "manifest.json").exists():
         if not force:
@@ -49,7 +62,7 @@ def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, r
     pipeline = (
         ["learn-soft"] + (["learn-hard"] if hard_labels else []) + ["explain-global"] + (["report"] if report else [])
     )
-    echo(" → ".join(pipeline), "run")
+    echo(" → ".join(pipeline) + (" · [yellow]quick preset[/]" if quick else ""), "run")
     run_soft(**kwargs)
     if hard_labels:
         from xai4chem.hard import learn_hard

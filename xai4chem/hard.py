@@ -206,7 +206,8 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             idx = np.where(mask)[0]
             Xh, fh, smi = X[idx], fps[idx], [smiles[i] for i in idx]
             task = detect_task(y)
-            table.update(hard_name, Task=task, Labels=f"{len(y):,}")
+            labels_text = f"{len(y):,}" + (f" ({int((y == 1).sum()):,} +)" if task == "binary" else "")
+            table.update(hard_name, Task=task, Labels=labels_text)
             if len(y) < MIN_HARD_ROWS or (task == "binary" and min((y == 0).sum(), (y == 1).sum()) < MIN_PER_CLASS):
                 table.finish(hard_name, ok=False, CV="too few", Time=elapsed(time.time() - col_started))
                 echo(f"[{hard_name}] too few hard labels ({len(y)}); the column stays soft-only", "warning")
