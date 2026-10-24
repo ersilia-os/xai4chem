@@ -146,7 +146,9 @@ def train_booster(X, y, sparse, seed, n_estimators=2000, val_frac=VAL_FRAC, para
     trn, val = _split(len(y), val_frac, seed)
     Xm = to_model_input(X, sparse)
     dtrain = xgb.QuantileDMatrix(Xm[trn], label=y[trn], max_bin=PARAMS["max_bin"])
-    dval = xgb.QuantileDMatrix(Xm[val], label=y[val], ref=dtrain, max_bin=PARAMS["max_bin"])
+    # A plain DMatrix on purpose: XGBoost 2.0 does not cache predictions for a QuantileDMatrix eval set,
+    # so every round re-predicted the whole validation split with every tree (20x slower, measured)
+    dval = xgb.DMatrix(Xm[val], label=y[val])
     full = {
         **PARAMS,
         "min_child_weight": min_child_weight(len(trn)),
