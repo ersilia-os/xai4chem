@@ -67,7 +67,7 @@ figcaption { font-size:11.5px; color:var(--muted); margin-top:6px; }
 .molcard { margin-top:18px; }
 .molcard .head { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:baseline; }
 .molcard .smi { font-family:var(--mono); font-size:11.5px; color:var(--muted); word-break:break-all; }
-.views { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px; margin-top:10px; }
+.views { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,250px)); gap:10px; margin-top:10px; }
 .views figure { margin:0; text-align:center; }
 .views svg { width:100%; height:auto; }
 .split { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; margin-top:10px; }
