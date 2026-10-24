@@ -93,7 +93,7 @@ def _chemotype_html(chemo):
                 H.esc(r["top_features"]),
             ]
         )
-    return H.table(["", "Scaffold", "Molecules", "Teacher", "S", "What drives S"], rows, numeric=(2, 3, 4))
+    return H.table(["", "Scaffold", "Molecules", "Teacher", "S", "Distinctive drivers"], rows, numeric=(2, 3, 4))
 
 
 def _training_details(model_dir, col):
@@ -206,8 +206,8 @@ def write_report(model_dir, output, open_browser=False):
                 content.append(
                     '<h3 style="margin-top:18px; font-size:13px">Chemotypes</h3>'
                     '<p class="faint" style="font-size:11.5px;margin:0 0 6px">The most common Bemis–Murcko scaffolds '
-                    "of the panel: how the teacher and S score them, and what drives S within each.</p>"
-                    + _chemotype_html(chemo)
+                    "of the panel: how the teacher and S score them, and the features that matter more within each scaffold "
+                    "than across the panel.</p>" + _chemotype_html(chemo)
                 )
         content.append(_training_details(model_dir, col))
         substructures = _substructure_rows(top_s, bit_dictionary) if featurizer == "morgan" else None

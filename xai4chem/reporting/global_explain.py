@@ -172,7 +172,7 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
             )
             _fidelity_figure(col, out)
             chemotypes = _chemotype_table(
-                scaffolds, groups, group_abs, S_panel, teacher_z.get(col.id), col.transform, labels
+                scaffolds, groups, group_abs, S_panel, teacher_z.get(col.id), col.transform, labels, importance
             )
             chemotypes.to_csv(out / "chemotypes.csv", index=False)
             summary = {
@@ -294,14 +294,17 @@ def _teacher_on_rows(model, rows):
     return out
 
 
-def _chemotype_table(scaffolds, groups, group_abs, S_panel, teacher, transform, labels):
+def _chemotype_table(scaffolds, groups, group_abs, S_panel, teacher, transform, labels, importance):
+    """Per scaffold: size, mean teacher and S, and the features that matter *more* there than overall."""
     from xai4chem.soft import inverse
 
     rows = []
     for i, scaffold in enumerate(scaffolds):
         members = groups == i
         n = int(members.sum())
-        top = np.argsort(-group_abs[i])[:3]
+        # Distinctive drivers: mean |SHAP| within the scaffold minus across the panel, so size bits that
+        # matter everywhere do not crowd out what is specific to the series
+        top = np.argsort(-(group_abs[i] / max(n, 1) - importance))[:3]
         mean_teacher = (
             np.nanmean(teacher[members]) if teacher is not None and np.isfinite(teacher[members]).any() else np.nan
         )
