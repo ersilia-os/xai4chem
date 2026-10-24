@@ -62,6 +62,13 @@ One row per feature, sorted by importance:
   - the nearest labelled molecule
 - `png/` (with `--png`) has the atom maps of each molecule and column, side by side.
 
+## Comparisons (`xai4chem compare`)
+
+`compare` writes one HTML page per pair (`-o`, default `compare.html`) and prints the largest differences.
+The gap between the two predictions (model scale) splits exactly into the difference of base values (the gate,
+with a hard head) plus the per-feature differences of the attributions. A positive difference favours the
+first molecule. Both molecules are drawn on one colour scale.
+
 ## Fast predictions (`xai4chem predict`)
 
 `predict` skips attributions, so it scores millions of molecules. It writes `smiles` and `valid`, then P per

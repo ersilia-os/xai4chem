@@ -2,6 +2,7 @@
 
 import rich_click as click
 
+from xai4chem.cli.commands.compare import compare_cmd
 from xai4chem.cli.commands.explain import explain_cmd
 from xai4chem.cli.commands.explain_global import explain_global_cmd
 from xai4chem.cli.commands.fit import fit_cmd
@@ -23,6 +24,7 @@ _COMMANDS = {
     "learn-hard": learn_hard_cmd,
     "explain-global": explain_global_cmd,
     "explain": explain_cmd,
+    "compare": compare_cmd,
     "predict": predict_cmd,
     "report": report_cmd,
     "validate": validate_cmd,

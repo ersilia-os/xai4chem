@@ -4,7 +4,7 @@ import rich_click as click
 import rich_click.rich_click as rc
 
 COMMAND_PANELS = [
-    {"name": "Main commands", "commands": ["setup", "fit", "explain", "predict", "report", "info"]},
+    {"name": "Main commands", "commands": ["setup", "fit", "explain", "compare", "predict", "report", "info"]},
     {"name": "Pipeline commands", "commands": ["library", "learn-soft", "learn-hard", "explain-global", "validate"]},
 ]
 

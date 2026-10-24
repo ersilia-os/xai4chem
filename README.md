@@ -39,6 +39,7 @@ xai4chem fit -s soft.csv -m models/try --quick   # ~15 s: a first look (fewer ro
 xai4chem fit -s soft.csv -m models/my_model      # S → explanations → HTML report (~3 min)
 xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
 xai4chem explain -m models/my_model -i molecules.csv -o explanations/ --open
+xai4chem compare -m models/my_model -S "<smiles A>" -S "<smiles B>" --open    # a matched pair
 xai4chem predict -m models/my_model -S "CC(=O)Nc1ccc(O)cc1" -o paracetamol.csv     # quick, no file needed
 ```
 
@@ -67,6 +68,7 @@ The input files:
 | `library` | Write the library SMILES for the teacher to score |
 | `fit` | Run learn-soft → [learn-hard] → explain-global → report |
 | `explain` | Explain molecules: predictions, attributions, the nearest library molecule, an HTML gallery (and PNGs with `--png`) |
+| `compare` | Why one molecule scores above another: the gap split into per-feature differences |
 | `predict` | Score molecules fast, without explanations |
 | `report` | Write the self-contained HTML model report |
 | `info` | Show a model card in the terminal |

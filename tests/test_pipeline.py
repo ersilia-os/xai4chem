@@ -420,3 +420,15 @@ def test_tuning(library, tmp_path):
     )
     meta = json.loads((tmp_path / "m" / "columns" / "c0" / "soft_meta.json").read_text())
     assert meta["tuned"] and "eta" in meta["params"]
+
+
+def test_compare_is_exact(fitted, tmp_path):
+    _, model_dir, _ = fitted
+    a, b = QUERIES[0], QUERIES[1]
+    run(["compare", "-m", model_dir, "-S", a, "-S", b, "-o", tmp_path / "c.html"])
+    assert (tmp_path / "c.html").exists()
+    model = XAIModel(model_dir)
+    r = model.explain([a, b])["activity"]
+    gap = r["P"][0] - r["P"][1]
+    parts = (r["base_P"][0] - r["base_P"][1]) + (r["phi_P"][0] - r["phi_P"][1]).sum()
+    assert abs(gap - parts) < 1e-4
