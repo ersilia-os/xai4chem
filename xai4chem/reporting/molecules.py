@@ -109,7 +109,7 @@ def explain_molecules(
         if len(smiles) > MAX_CARDS:
             echo(f"the gallery shows the first {MAX_CARDS} molecules; the CSV files have all {len(smiles):,}", "info")
     if not quiet:
-        _terminal_table(cols, pred, long_rows)
+        _terminal_table(cols, pred, long_rows, sparse=model.featurizer.sparse)
         if neighbours is not None:
             T = pred["library_T"].dropna()
             far = int((T < DOMAIN_FAR).sum())
@@ -231,8 +231,13 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels, nb=None):
         phi = r["phi_P"][i]
         # Present features first: they are what a chemist can act on. Absent ones are listed apart, briefly
         order = np.argsort(-np.abs(phi))
-        present = [f for f in order if x_row[f] > 0 and phi[f] != 0][:CARD_FEATURES]
-        absent = [f for f in order if x_row[f] == 0 and phi[f] != 0][:ABSENT_FEATURES]
+        if model.featurizer.sparse:
+            present = [f for f in order if x_row[f] > 0 and phi[f] != 0][:CARD_FEATURES]
+            absent = [f for f in order if x_row[f] == 0 and phi[f] != 0][:ABSENT_FEATURES]
+        else:
+            # Descriptors are values, not presences: a negative logP is not an absent feature
+            present = [f for f in order if phi[f] != 0][:CARD_FEATURES]
+            absent = []
         scale = max([abs(float(phi[f])) for f in present + absent] or [1.0])
         local = model.featurizer.molecule_labels(mol)
         bars = H.contributions([(local.get(f, labels[f]), float(phi[f])) for f in present], scale=scale)
@@ -324,7 +329,7 @@ def _png(model, cols, res, i, mol_id, mol, out):
         atom_png(drawn, panels, out / f"{_safe(mol_id)}_{_safe(col.name)}.png", vmax)
 
 
-def _terminal_table(cols, pred, long_rows):
+def _terminal_table(cols, pred, long_rows, sparse=True):
     from rich import box
     from rich.table import Table
 
@@ -354,7 +359,7 @@ def _terminal_table(cols, pred, long_rows):
         tops = []
         for fr in feats:
             v = fr.get("phi_P", fr["phi_S"])
-            absent = "[dim]absent[/] " if fr["value"] == 0 else ""
+            absent = "[dim]absent[/] " if sparse and fr["value"] == 0 else ""
             tops.append(f"[{'red' if v > 0 else 'blue'}]{v:+.2f}[/] {absent}{escape(fr['label'][:28])}")
         cells.append("  ".join(tops))
         table.add_row(*cells)

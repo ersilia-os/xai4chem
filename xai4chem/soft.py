@@ -265,15 +265,15 @@ def load_features(smiles, rows, library, featurizer, n_jobs=None):
     parts, done = [], 0
     with sweep_progress("featurizing", len(missing)) as tick:
         for block in _imap(_featurize_chunk, ((cfg, c) for c in chunks), n_jobs if len(missing) > 20000 else 1):
-            parts.append(block)
-            done += len(block)
+            parts.append(sp.csr_matrix(block, dtype=np.float32) if featurizer.sparse else block)
+            done += block.shape[0]
             tick(done)
-    X_new = np.vstack(parts)
+    X_new = sp.vstack(parts, format="csr") if featurizer.sparse else np.vstack(parts)
     order = np.concatenate([np.where(found)[0], np.where(~found)[0]])
     inverse_order = np.empty_like(order)
     inverse_order[order] = np.arange(len(order))
     if featurizer.sparse:
-        return sp.vstack([X_lib, sp.csr_matrix(X_new, dtype=np.float32)], format="csr")[inverse_order]
+        return sp.vstack([X_lib, X_new], format="csr")[inverse_order]
     return np.vstack([X_lib, X_new.astype(np.float32)])[inverse_order]
 
 

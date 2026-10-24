@@ -62,7 +62,7 @@ def nearest(queries, reference):
     return T, idx
 
 
-def nearest_large(queries, reference, block=50):
+def nearest_large(queries, reference, block=25):
     """:func:`nearest` against a very large reference (the whole library), as reference × queries.
 
     A sparse library times a small dense block of queries is cheap (~1 s per 50 queries against 1.36M

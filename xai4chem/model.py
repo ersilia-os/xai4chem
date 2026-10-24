@@ -261,8 +261,14 @@ class XAIModel(object):
             return X, valid, fps
         cfg = self.featurizer.to_config()
         chunks = [smiles[i : i + 5000] for i in range(0, len(smiles), 5000)]
-        blocks = list(_imap(_featurize_chunk, ((cfg, c) for c in chunks), n_jobs if len(smiles) > 20000 else 1))
-        X = np.vstack(blocks) if blocks else self.featurize([])
+        blocks = []
+        for block in _imap(_featurize_chunk, ((cfg, c) for c in chunks), n_jobs if len(smiles) > 20000 else 1):
+            # Sparse featurizers are kept sparse chunk by chunk: a dense Morgan copy is 2 GB per million molecules
+            blocks.append(sp.csr_matrix(block, dtype=np.float32) if self.sparse else block)
+        if not blocks:
+            X = self.featurize([])
+        else:
+            X = sp.vstack(blocks, format="csr") if self.sparse else np.vstack(blocks)
         return X, valid_mask(smiles), None
 
     def scores(self, smiles, columns=None, batch_size=BATCH, progress=None, n_jobs=None):
@@ -330,6 +336,9 @@ class XAIModel(object):
         if getattr(self, "_library_fps", None) is None:
             self._library_fps = binarize(library.csr("morgan", verb="loading library fingerprints"))
         T, rows = nearest_large(fingerprints(smiles), self._library_fps)
+        valid = valid_mask(smiles)
+        T = np.where(valid, T, np.nan)
+        rows = np.where(valid, rows, -1)
         teacher = {}
         targets = self.dir / TARGETS_NAME
         if targets.exists():
@@ -339,8 +348,9 @@ class XAIModel(object):
                 by_row = np.full(len(library), np.nan, dtype=np.float32)
                 ok = target_rows >= 0
                 by_row[target_rows[ok]] = Z[ok, j]
-                teacher[col.name] = inverse(by_row[rows], col.transform)
-        return {"T": T, "row": rows, "smiles": [library.smiles[i] for i in rows], "teacher": teacher}
+                teacher[col.name] = np.where(valid, inverse(by_row[rows], col.transform), np.nan)
+        neighbours = [library.smiles[i] if i >= 0 else None for i in rows]
+        return {"T": T, "row": rows, "smiles": neighbours, "teacher": teacher}
 
     def _check_golden(self):
         golden = read_json(self.dir / GOLDEN_NAME)

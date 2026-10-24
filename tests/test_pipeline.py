@@ -160,6 +160,7 @@ def test_commands(fitted):
     # Library molecules are their own nearest neighbours, and the teacher's value is the soft label
     assert pred.loc[pred.id == "anilide", "library_T"].iloc[0] <= 1.0
     assert not pred.loc[pred.id == "bad", "valid"].iloc[0]
+    assert pred.loc[pred.id == "bad", ["library_T", "activity_library_teacher"]].isna().all(axis=None)
     assert (out / "index.html").exists() and "anilide" in (out / "index.html").read_text()
     if featurizer != "datamol":
         assert (out / "png" / "anilide_activity.png").exists()
