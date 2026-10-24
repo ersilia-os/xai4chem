@@ -1,27 +1,27 @@
 [tool.poetry]
 name = "xai4chem"
-version = "1.0.0"
-description = "XAI4Chem is an explainable AI package for chemistry"
+version = "2.0.0"
+description = "XAI4Chem: explainable surrogates of chemistry models, learned from soft labels"
 authors = ["Ersilia Open Source Initiative <hello@ersilia.io>", "Jason Hlozek <jason.hlozek@uct.ac.za>", "Hellen Namulinda <hellennamulinda@gmail.com>", "Gemma Turon <gemma@ersilia.io>", "Miquel Duran-Frigola <miquel@ersilia.io>"]
 
 [tool.poetry.dependencies]
-scikit-learn  = "<=1.6.1"
+python        = ">=3.10,<3.13"
+scikit-learn  = "1.6.1"
+scipy         = "1.15.3"
 datamol       = "0.12.5"
 rdkit         = "2024.3.6"
 shap          = "0.47.0"
-xgboost       = "<=2.0"
-optuna        = "4.4.0"
-pandas        = "<=2.3.0"
+xgboost       = "2.0.0"
+pandas        = "2.3.0"
 matplotlib    = "3.10.8"
-seaborn       = "0.13.2"
+h5py          = "3.16.0"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "*"
 
 [tool.poetry.scripts]
-xai4chem = "xai4chem.cli:cli"
+xai4chem = "xai4chem.cli:main"
 
 [build-system]
 requires    = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.setuptools.package-data]
-my_package = ["tools/accfg/*.csv"]

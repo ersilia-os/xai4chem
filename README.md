@@ -1,123 +1,117 @@
 # XAI4Chem
 
-Explainable AI for Chemistry
+Explainable AI for chemistry: explain *what a model has learned* by distilling it into an interpretable
+surrogate, then attributing the surrogate's predictions to substructures, functional groups or
+descriptors.
+
+XAI4Chem follows the logic of [Olinda](https://github.com/ersilia-os/olinda):
+
+1. **Soft labels.** Score a reference library of molecules with any *teacher* model, for example an
+   Ersilia Model Hub model or a ZairaChem model.
+2. **S, the surrogate.** XGBoost learns to reproduce the teacher on the chosen featurizer. Teacher
+   probabilities are learned in logit space.
+3. **H, from hard labels (optional).** A model trained on experimental measurements with the same
+   featurizer. It is calibrated onto S's scale by an isotonic map (**H_S**) and mixed in only near the
+   labelled chemistry: `P = (1 − a)·S + a·H_S`, where `a = a_max · ramp(T)` and T is the 1-NN Tanimoto
+   to the labelled set.
+
+For a single molecule `a` is fixed, so the explanations combine exactly. Each molecule gets three views:
+
+- **teacher (S)**
+- **experiments (H_S)**
+- **combined (P)**
+
+There is also a map of where the experiments disagree with the teacher.
+
+Explanations describe S. They are only as faithful as S is to the teacher, so every report shows that
+fidelity.
 
 ## Installation
-For the environment,
+
 ```bash
-conda create -n xai4chem python=3.10 -y
+conda create -n xai4chem -c conda-forge python=3.10 -y
 conda activate xai4chem
+python -m pip install git+https://github.com/ersilia-os/xai4chem.git
 ```
-Then install from GitHub:
-```bash
-python -m pip install git+https://github.com/ersilia-os/xai4chem.git 
-```
- 
+
 ## Usage
-### CLI
-#### Training Explainer
-Use the following command to train the model and produce global explanations for the training data:
+
+### 1. Prepare the reference library (once)
+
+Featurizing a large library is the expensive, model-independent step. `setup` stores row-aligned
+feature matrices, a panel of molecules for global explanations and (for Morgan) a bit dictionary under
+`~/.xai4chem/library/`. Set `XAI4CHEM_HOME` or pass `--library-dir` to change the location.
 
 ```bash
-xai4chem explain_global --input_file <path_to_input_csv> --output_dir <output_directory> --representation <representation_type>
+xai4chem setup --library-file reference_library.csv --featurizer morgan accfg datamol --n-jobs 8
 ```
-- <path_to_input_csv>: Path to the CSV file containing input data (must include "smiles" and "activity" columns).
-- <output_directory>: Directory to save the trained model, evaluation and interpretability reports.
-- <representation_type>: Type of molecular representation to use. Options are: datamol, morgan, accfg.
 
+### 2. Get soft labels
 
-#### Inference
-Use the following command to make predictions with a trained model for a shortlist of molecules:
+Score the library with your teacher and save a CSV with a `smiles` column plus one column per teacher
+output. This is the same format Olinda uses.
 
-```bash 
-xai4chem explain_mols --input_file <path_to_input_csv> --model_dir <model_directory> --output_dir <output_directory>
+```bash
+xai4chem library -o reference_library_smiles.csv
+# ...run the teacher on it → soft_labels.csv
 ```
-- <path_to_input_csv>: Path to the CSV file containing input data (must include "smiles" column).
-- <model_directory>: Directory containing the saved model file.
-- <output_directory>: Directory to save the prediction results, and interpretability reports.
-- <index_col>: (Optional) provide the column name to use for naming the output files for each molecule instead of using the SMILES string of each molecule.
 
-If the explainer was trained with the accfg representation, then functional group explanations will be produced for each molecule.
+### 3. Fit
 
-### API
+```bash
+xai4chem fit --soft-labels soft_labels.csv --featurizer morgan --model-dir models/my_model
+xai4chem fit --soft-labels soft_labels.csv --hard-labels hard_labels.csv --featurizer accfg --model-dir models/my_model
+```
 
-See notebook example in /notebooks/train_and_plot_interpretability.ipynb
+- `fit` runs `learn-soft`, then `learn-hard` (when hard labels are given), then `explain-global`.
+- Each stage is also a command of its own.
+- Hard-label columns must be named like the soft-label columns: 0/1 labels give a classifier, anything
+  else a regressor.
+- Add `--stability` to retrain S with a second seed and report how stable the global importances are.
 
+### 4. Explain, report, validate
 
-#### Data
-Read data file and split:
+```bash
+xai4chem explain  --model-dir models/my_model -i my_molecules.csv -o explanations/ --id-col name
+xai4chem report   --model-dir models/my_model -o report/
+xai4chem validate --model-dir models/my_model --soft-labels heldout_soft.csv --hard-labels heldout_hard.csv
+```
+
+`explain` writes:
+
+- `predictions.csv`: P on the teacher's scale, plus S, H_S, T, a, the nearest labelled analogue and an
+  S-vs-H_S agreement score.
+- `attributions.csv`: feature-level attributions φ_S, φ_HS and φ_P.
+- Per molecule:
+  - a waterfall plot
+  - atom highlights (teacher, experiments, combined, disagreement)
+  - drawings of the top features
+
+## Featurizers
+
+| Featurizer | Features | Atom view | Labels |
+|---|---|---|---|
+| `morgan` | Morgan counts, radius 3, 2048 bits | yes (occurrence centres) | named by the bit dictionary, e.g. `bit 1683: Cl (78%)`; the percentage shows how often the bit's top substructure is the one that set it, so collisions are visible |
+| `accfg` | AccFG functional-group and heterocycle counts | yes (group atoms) | group names |
+| `datamol` | datamol physicochemical descriptors | no | descriptor names |
+
+## Python API
+
 ```python
-import pandas as pd  
-from sklearn.model_selection import train_test_split
+from xai4chem import XAIModel
 
-data = pd.read_csv("plasmodium_falciparum_3d7_ic50.csv") #data path
-
-# Extract SMILES and target values
-smiles = data["smiles"]
-target = data["pchembl_value"] #target value's column_name
-
-# Split data into training and test sets
-smiles_train, smiles_valid, y_train, y_valid = train_test_split(smiles, target, test_size=0.2, random_state=42)
-
-# Reset indices
-smiles_train.reset_index(drop=True, inplace=True)
-smiles_valid.reset_index(drop=True, inplace=True)
-y_train.reset_index(drop=True, inplace=True)
-y_valid.reset_index(drop=True, inplace=True)
-```
-Calculate and transform descriptors:
-Choose datamol, morgan or accfg 
-```python
-from xai4chem import DatamolDescriptor
-
-descriptor = DatamolDescriptor(discretize=False)
-
-# Fit the descriptor to training data
-descriptor.fit(smiles_train)
-
-# Transform the data
-smiles_train_transformed = descriptor.transform(smiles_train)
-smiles_valid_transformed = descriptor.transform(smiles_valid)
+model = XAIModel("models/my_model")
+model.predict(["CCO", "c1ccccc1"])
+res = model.explain(["CCO"])["activity"]   # S, phi_S, P, phi_P, and with a hard head HS, phi_HS, T, a...
 ```
 
-#### Model Training and Evaluation
-The tool provides `Regressor` and `Classifier` classes for training and evaluating regression and classification models respectively using the XGBoost algorithm. You can train the model with default parameters or perform hyperparameter optimization using Optuna.
+## Model directory
 
-Also, you can specify the number of features(k) to use.
-Feature selection will automatically select the relevant k features during training. 
-```python
-from xai4chem.supervised import Regressor, Classifier
-
-regressor = Regressor(output_folder, k=100) #Specify the output folder where evaluation metrics and interpretability plots will be saved.
-
-# Train the model
-regressor.fit(smiles_train_transformed, y_train, default_params=False)
-
-#you can save the trained model
-#regressor.save_model('model_filename.joblib') #pass the filename
-
-# Evaluate the model
-regressor.evaluate(valid_features, smiles_valid, y_valid)
 ```
-#### Model Interpretation
-The `Regressor` class also provides functionality for interpreting model predictions. You can generate plots by;
-```python
-regressor.explain(train_features, smiles_list=smiles_train, fingerprints='rdkit') #fingerprints='rdkit' or 'morgan'
+models/my_model/
+  manifest.json  targets.h5  golden.json  bit_dictionary.json
+  columns/c0/s.json  soft_meta.json  explain/  _hard/{h.json, h_to_s.json, labelled.csv, hard_meta.json}
 ```
 
-#### Substructure Importance for Individual Molecules
-
-```regressor.explain_mol_atoms("CC(=O)Nc1ccc(O)cc1")
-```
-
-#### Other models.
-To generate interpretability plots for a trained model, use;
-```python
-from xai4chem.reporting import explain_model
-
-regressor = Regressor(output_folder)
-regressor.load_model(model_path)
-regressor.explain_mol_atoms("CC(=O)Nc1ccc(O)cc1")
- 
-```
-
+`golden.json` stores expected outputs for a few molecules. They are re-checked every time the model
+loads, so a mismatched environment fails loudly.

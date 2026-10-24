@@ -1,0 +1,177 @@
+"""A self-contained HTML report of a model: fidelity, what the teacher has learned, and the hard head."""
+
+import time
+from pathlib import Path
+
+import pandas as pd
+
+from xai4chem.console import STEP_COLORS, elapsed, rule, set_active_color, summary_panel
+from xai4chem.console import path as cpath
+from xai4chem.reporting import html as H
+from xai4chem.reporting.drawing import fragment_svg
+from xai4chem.run import EXPLAIN_DIRNAME, column_dir, read_json, read_manifest
+
+TOP = 20
+
+METHODS = """
+<details style="margin-top:8px"><summary>How to read this report</summary>
+<div class="card" style="margin-top:10px; font-size:12.5px; line-height:1.55">
+<p><b>S</b> is a gradient-boosting surrogate trained to reproduce the teacher's outputs (soft labels) over the
+reference library. Probability outputs are learned in logit space. Its <b>fidelity</b> is measured on library
+molecules held out from training. Explanations describe S, so they are as trustworthy as that fidelity.</p>
+<p>Attributions are exact TreeSHAP values on S's scale. <b>Importance</b> is the mean |SHAP| over the explanation
+panel, a fixed random subset of the library. <b>Direction</b> is the correlation between a feature's value and its
+SHAP value: positive means more of the feature raises the prediction. <b>When present</b> is the mean |SHAP| over the
+molecules that contain the feature, which ranks rare but strong features fairly.</p>
+<p>Morgan bits are folded, so one bit can be set by several substructures. Each bit is named by the substructure that
+most often sets it in the library, with that substructure's share; <b>collision</b> is the share of occurrences
+that come from other substructures.</p>
+<p>With hard labels, <b>H</b> is trained on the measurements with the same features, and carried onto S's scale by
+an isotonic map (<b>H_S</b>). The prediction is P = (1 − a)·S + a·H_S, where a = a_max · ramp(T) and T is the
+Tanimoto similarity (binary Morgan) to the nearest labelled molecule: the hard head only speaks near the labelled
+chemistry. a_max is earned from how well H_S reproduces the teacher on held-out library molecules. Because a is
+fixed for a given molecule, the explanation of P is exactly (1 − a)·φ_S + a·φ_HS.</p>
+</div></details>
+"""
+
+
+def _f(v, fmt="{:.3f}"):
+    try:
+        return fmt.format(v) if v is not None and v == v else "—"
+    except (TypeError, ValueError):
+        return "—"
+
+
+def _direction_badge(d):
+    if d > 0.05:
+        return H.badge("raises", hue="crimson")
+    if d < -0.05:
+        return H.badge("lowers", hue="cobalt")
+    return H.badge("mixed")
+
+
+def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
+    rows = []
+    for _, r in df.head(TOP).iterrows():
+        drawing = ""
+        if featurizer_name == "morgan" and bit_dictionary is not None:
+            bit = int(str(r["feature"]).split("-")[1])
+            frags = bit_dictionary.get(str(bit), {}).get("fragments", [])
+            if frags:
+                drawing = fragment_svg(frags[0]["smiles"], size=90)
+        elif featurizer_name == "accfg" and smarts is not None:
+            idx = int(str(r["feature"]).split("-")[1])
+            drawing = fragment_svg(smarts[idx], size=90, smarts=True)
+        cells = [
+            f'<div style="width:90px">{drawing}</div>' if drawing else "",
+            H.esc(r["label"]),
+            _f(r["mean_abs_shap"]),
+            _direction_badge(r["direction"]),
+            _f(r["frequency"], "{:.1%}"),
+            _f(r["mean_abs_shap_when_present"]),
+        ]
+        if "collision" in df.columns:
+            cells.append(_f(r["collision"], "{:.0%}"))
+        rows.append(cells)
+    headers = ["", "Feature", "Importance", "Direction", "Frequency", "When present"]
+    if "collision" in df.columns:
+        headers.append("Collision")
+    return H.table(headers, rows, numeric=(2, 4, 5, 6))
+
+
+def write_report(model_dir, output, open_browser=False):
+    started = time.time()
+    color = STEP_COLORS["report"]
+    set_active_color(color)
+    model_dir = Path(model_dir)
+    output = Path(output)
+    if output.suffix != ".html":
+        output = output / "report.html"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    manifest = read_manifest(model_dir)
+    rule("xai4chem · report", style=color, right=cpath(model_dir))
+    featurizer = manifest["featurizer"]["name"]
+    bit_dictionary = None
+    if (model_dir / "bit_dictionary.json").exists():
+        bit_dictionary = read_json(model_dir / "bit_dictionary.json")["bits"]
+    smarts = None
+    if featurizer == "accfg":
+        from xai4chem.featurizers.accfg import AccFgFingerprint
+
+        smarts = AccFgFingerprint().smarts()
+
+    body = []
+    for col in manifest["columns"]:
+        exp = column_dir(model_dir, col["id"]) / EXPLAIN_DIRNAME
+        if not (exp / "summary.json").exists():
+            raise FileNotFoundError(f"No global explanations for {col['name']!r}. Run `xai4chem explain-global -m {model_dir}` first.")
+        s = read_json(exp / "summary.json")
+        fid = s["fidelity"]
+        hard = s.get("hard")
+        stats = [
+            H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules", tip="R² of S against the teacher, on S's scale"),
+            H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),
+        ]
+        if s.get("stability_spearman") is not None:
+            stats.append(H.stat("Stability", _f(s["stability_spearman"], "{:.2f}"), "importances across two seeds"))
+        if hard:
+            cv = hard["cv"]
+            cv_v, cv_k = (cv["auroc"], "CV AUROC") if "auroc" in cv else (cv["spearman"], "CV Spearman")
+            stats.append(H.stat(cv_k, _f(cv_v), f"H on {hard['n_labels']:,} labels"))
+            stats.append(H.stat("a_max", _f(hard["a_max"], "{:.2f}"), f"R² of H_S vs teacher {_f(hard['alignment_r2'], '{:.2f}')}"))
+        content = [H.kpis(stats)]
+        figs = []
+        if (exp / "s_fidelity.png").exists():
+            figs.append(H.figure(exp / "s_fidelity.png", "Teacher against S on held-out library molecules."))
+        figs.append(H.figure(exp / "s_importance.png", "Mean |SHAP| over the panel; red raises, blue lowers."))
+        content.append(f'<div class="figrow" style="margin-top:14px">{"".join(figs)}</div>')
+        content.append(H.figure(exp / "s_beeswarm.png", "Each dot is one panel molecule; colour is the feature's value."))
+        top_s = pd.read_csv(exp / "global_s.csv")
+        content.append('<h3 style="margin-top:18px; font-size:13px">Top features</h3>' + _top_table(top_s, featurizer, bit_dictionary, smarts))
+        body.append(H.section(f"{col['name']} · what the teacher has learned", "".join(content), hint=f"panel of {s['panel_size']:,} library molecules"))
+
+        if hard:
+            hc = [
+                H.kpis(
+                    [
+                        H.stat("Task", hard["task"], f"{hard['n_labels']:,} labelled molecules"),
+                        H.stat("Reach", _f(hard.get("frac_panel_gated"), "{:.1%}"), f"of the library has a > 0 (T ≥ {hard['t_lo']})"),
+                        H.stat("Agreement", _f(hard.get("importance_spearman_s_vs_hs"), "{:.2f}"), "S vs H_S importances (ρ)"),
+                        H.stat("Calibration", hard["isotonic_direction"], "isotonic H → S map"),
+                    ]
+                )
+            ]
+            hfigs = [
+                H.figure(exp / "hs_calibration.png", "Isotonic map from H's margin onto S's scale."),
+                H.figure(exp / "hs_reach.png", "Similarity of library molecules to the labelled set."),
+                H.figure(exp / "hs_importance.png", "What the experiments say, on S's scale."),
+            ]
+            hc.append(f'<div class="figrow" style="margin-top:14px">{"".join(hfigs)}</div>')
+            top_h = pd.read_csv(exp / "global_hs.csv")
+            hc.append('<h3 style="margin-top:18px; font-size:13px">Top features according to the experiments</h3>' + _top_table(top_h, featurizer, bit_dictionary, smarts))
+            body.append(H.section(f"{col['name']} · experiments", "".join(hc), hint="hard labels, H_S"))
+
+    lede = (
+        f"Surrogate of a teacher model, learned from soft labels over the {H.esc(manifest['library']['name'])} reference library "
+        f"({manifest['library']['n_molecules']:,} molecules) with {H.esc(manifest['featurizer']['name'])} features. "
+        f"xai4chem {H.esc(manifest['xai4chem_version'])}."
+    )
+    page = H.page(
+        f"xai4chem · {model_dir.name}",
+        "xai4chem",
+        f"{H.esc(model_dir.name)} · model <em>report</em>",
+        lede,
+        METHODS + "".join(body),
+    )
+    output.write_text(page)
+    summary_panel(
+        "xai4chem · report",
+        [("Report", f"[dim]{cpath(output)}[/]"), ("Size", f"{output.stat().st_size / 1e6:.1f} MB"), ("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]")],
+        border_style=color,
+        icon="✓",
+    )
+    if open_browser:
+        import webbrowser
+
+        webbrowser.open(output.resolve().as_uri())
+    return output
