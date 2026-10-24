@@ -64,5 +64,5 @@ One row per feature, sorted by importance:
 
 ## Fast predictions (`xai4chem predict`)
 
-`predict` skips attributions, so it scores millions of molecules. With `--details` it also writes S, H_S, T
-and `a`.
+`predict` skips attributions, so it scores millions of molecules. It writes `smiles` and `valid`, then P per
+column on the teacher's scale. With `--details` it also writes S, H_S, T and `a`.
