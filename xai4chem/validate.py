@@ -8,7 +8,7 @@ from scipy.stats import spearmanr
 from xai4chem.console import STEP_COLORS, console, echo, elapsed, rule, set_active_color, summary_panel
 from xai4chem.console import path as cpath
 from xai4chem.io import match_hard_columns, read_labels
-from xai4chem.model import XAIModel, valid_mask
+from xai4chem.model import XAIModel
 from xai4chem.run import write_json
 from xai4chem.soft import fidelity, forward
 
@@ -58,7 +58,7 @@ def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
             echo(f"skipping columns the model does not have: {unknown}", "warning")
         echo(f"scoring {len(smiles):,} molecules from [dim]{cpath(path)}[/]", "run")
         res = model.scores(smiles, columns=sorted(set(mapping.values())))
-        valid = valid_mask(smiles)
+        valid = res.pop("_valid")
         if (~valid).any():
             echo(f"{int((~valid).sum()):,} unparseable SMILES are left out of the metrics", "warning")
         for src, name in mapping.items():

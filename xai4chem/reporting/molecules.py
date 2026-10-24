@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from rdkit import Chem
+from rich.markup import escape
 
 from xai4chem.console import STEP_COLORS, console, echo, elapsed, rule, set_active_color, summary_panel, sweep_progress
 from xai4chem.console import path as cpath
@@ -298,7 +299,7 @@ def _terminal_table(cols, pred, long_rows):
         if row["column"] == first:
             by_mol.setdefault(row["id"], []).append(row)
     for _, rec in pred.head(TERMINAL_ROWS).iterrows():
-        cells = [str(rec["id"])]
+        cells = [escape(str(rec["id"]))]
         for col in cols:
             v = rec[col.name]
             cells.append("—" if pd.isna(v) else f"{v:.3f}")
@@ -309,7 +310,7 @@ def _terminal_table(cols, pred, long_rows):
         tops = []
         for fr in feats:
             v = fr.get("phi_P", fr["phi_S"])
-            tops.append(f"[{'red' if v > 0 else 'blue'}]{v:+.2f}[/] {fr['label'][:28]}")
+            tops.append(f"[{'red' if v > 0 else 'blue'}]{v:+.2f}[/] {escape(fr['label'][:28])}")
         cells.append("  ".join(tops))
         table.add_row(*cells)
     console.print(table)

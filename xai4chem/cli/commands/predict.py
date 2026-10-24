@@ -10,7 +10,9 @@ from xai4chem.cli import options
 @options.columns()
 @options.smiles_column()
 @click.option("--details", is_flag=True, help="Also write S, H_S, T and a per column.")
-@click.option("--n-jobs", "-j", default=1, show_default=True, type=int, help="Featurize in this many worker processes.")
+@click.option(
+    "--n-jobs", "-j", default=None, type=int, help="Worker processes for featurization (default: CPUs − 1, at most 8)."
+)
 @options.friendly_errors
 def predict_cmd(model_dir, input_file, smiles_list, output, columns, smiles_column, details, n_jobs):
     """Score molecules fast, without explanations (millions of molecules are fine)."""

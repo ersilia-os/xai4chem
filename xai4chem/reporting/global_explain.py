@@ -16,6 +16,7 @@ import time
 
 import numpy as np
 import pandas as pd
+from rich.markup import escape
 from scipy.stats import spearmanr
 
 from xai4chem.console import STEP_COLORS, LiveTable, elapsed, rule, set_active_color, summary_panel
@@ -218,13 +219,13 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
             table.finish(
                 col.name,
                 **{
-                    "Top feature": tab.iloc[0]["label"][:40],
+                    "Top feature": escape(tab.iloc[0]["label"][:40]),
                     "Agreement S~H_S": agreement,
                     "Time": elapsed(time.time() - col_started),
                 },
             )
 
-    rows_out = [(s["name"], f"top: {s['top_features'][0]['label']}") for s in summaries]
+    rows_out = [(s["name"], f"top: {escape(s['top_features'][0]['label'])}") for s in summaries]
     rows_out += [
         ("Outputs", f"[dim]{cpath(model.dir)}/columns/*/explain[/]"),
         ("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]"),

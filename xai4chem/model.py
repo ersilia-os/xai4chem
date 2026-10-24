@@ -49,6 +49,7 @@ RDLogger.DisableLog("rdApp.*")
 SLOPE_EPS = 1e-6
 GOLDEN_TOL = 1e-4
 BATCH = 20000
+LIBRARY_THRESHOLD = 50000
 
 
 def _load_booster(path):
@@ -202,9 +203,8 @@ class XAIModel(object):
             out[col.name] = r
         return out
 
-    def _margins_batch(self, smiles, columns, X=None):
+    def _margins_batch(self, smiles, columns, X=None, fps=None):
         X = self.featurize(smiles) if X is None else X
-        fps = None
         out = {}
         for col in columns:
             S = predict_margin(col.s, X, self.sparse)
@@ -220,34 +220,77 @@ class XAIModel(object):
             out[col.name] = r
         return out
 
-    def scores(self, smiles, columns=None, batch_size=BATCH, progress=None, n_jobs=1):
-        """S, P (and H_S, T, a) on the model's scale per column, batched, without attributions.
+    def _library(self):
+        from xai4chem.library import ReferenceLibrary
 
-        With ``n_jobs > 1`` batches are featurized in worker processes while the main process scores,
-        which matters for the slower featurizers (AccFG, datamol) on large inputs.
+        try:
+            return ReferenceLibrary(self.manifest["library"]["dir"])
+        except (FileNotFoundError, KeyError, OSError):
+            return None
+
+    def features(self, smiles, n_jobs=None, fingerprints_too=False):
+        """Features (and validity) for many molecules, as fast as possible.
+
+        Large inputs reuse the reference library: molecules found there (exact or canonical SMILES) get
+        their precomputed rows, and only the rest are featurized, in worker processes. Returns
+        ``(X, valid, fps)``; ``fps`` (binary Morgan, for the gate) is ``None`` unless asked for.
         """
-        from xai4chem.library import _featurize_chunk, _imap
+        from xai4chem.library import _featurize_chunk, _imap, default_n_jobs
+        from xai4chem.soft import align_to_library, load_features
 
         smiles = list(smiles)
-        cols = self._select(columns)
-        batches = [smiles[i : i + batch_size] for i in range(0, len(smiles), batch_size)]
-        cfg = self.featurizer.to_config()
-        features = (
-            _imap(_featurize_chunk, ((cfg, b) for b in batches), n_jobs) if n_jobs > 1 else (None for _ in batches)
+        n_jobs = n_jobs or default_n_jobs()
+        library = self._library() if len(smiles) >= LIBRARY_THRESHOLD else None
+        same = (
+            library is not None
+            and library.has(self.featurizer.name)
+            and library.manifest["features"][self.featurizer.name]["config"] == self.featurizer.to_config()
         )
+        if same:
+            rows = align_to_library(smiles, library)
+            X = load_features(smiles, rows, library, self.featurizer, n_jobs=n_jobs)
+            valid = rows >= 0
+            missing = np.where(~valid)[0]
+            valid[missing] = valid_mask([smiles[i] for i in missing])
+            fps = None
+            if fingerprints_too:
+                if self.featurizer.name == "morgan":
+                    fps = binarize(X)
+                elif library.has("morgan"):
+                    fps = binarize(load_features(smiles, rows, library, library.featurizer("morgan"), n_jobs=n_jobs))
+            return X, valid, fps
+        cfg = self.featurizer.to_config()
+        chunks = [smiles[i : i + 5000] for i in range(0, len(smiles), 5000)]
+        blocks = list(_imap(_featurize_chunk, ((cfg, c) for c in chunks), n_jobs if len(smiles) > 20000 else 1))
+        X = np.vstack(blocks) if blocks else self.featurize([])
+        return X, valid_mask(smiles), None
+
+    def scores(self, smiles, columns=None, batch_size=BATCH, progress=None, n_jobs=None):
+        """S, P (and H_S, T, a) on the model's scale per column, batched, without attributions.
+
+        Also returns, under the key ``"_valid"``, which SMILES could be parsed.
+        """
+        smiles = list(smiles)
+        cols = self._select(columns)
+        need_fps = any(c.hard is not None for c in cols) and self.featurizer.name != "morgan"
+        X, valid, fps = self.features(smiles, n_jobs=n_jobs, fingerprints_too=need_fps)
         parts, done = [], 0
-        for batch, X in zip(batches, features):
-            parts.append(self._margins_batch(batch, cols, X=X))
-            done += len(batch)
+        for start in range(0, len(smiles), batch_size):
+            stop = min(start + batch_size, len(smiles))
+            batch_fps = fps[start:stop] if fps is not None else None
+            parts.append(self._margins_batch(smiles[start:stop], cols, X=X[start:stop], fps=batch_fps))
+            done = stop
             if progress is not None:
                 progress(done)
-        return (
+        out = (
             {c.name: {k: np.concatenate([p[c.name][k] for p in parts]) for k in parts[0][c.name]} for c in cols}
             if parts
             else {}
         )
+        out["_valid"] = valid
+        return out
 
-    def predict(self, smiles, columns=None, details=False, batch_size=BATCH, progress=None, n_jobs=1):
+    def predict(self, smiles, columns=None, details=False, batch_size=BATCH, progress=None, n_jobs=None):
         """One row per molecule: P on the teacher's scale per column (NaN for unparseable SMILES).
 
         With ``details``, also S and H_S (on the teacher's scale), T and a. No attributions are computed,
@@ -265,7 +308,7 @@ class XAIModel(object):
                     df[f"{col.name}_HS"] = inverse(r["HS"], col.transform)
                     df[f"{col.name}_T"] = r["T"]
                     df[f"{col.name}_a"] = r["a"]
-        df.loc[~valid_mask(smiles), df.columns[1:]] = np.nan
+        df.loc[~res["_valid"], df.columns[1:]] = np.nan
         return df
 
     def _check_golden(self):

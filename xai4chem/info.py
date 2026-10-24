@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from rich.markup import escape
+
 from xai4chem.console import STEP_COLORS, console, detail, echo, rule, set_active_color
 from xai4chem.console import path as cpath
 from xai4chem.run import EXPLAIN_DIRNAME, SOFT_META_NAME, column_dir, hard_dir, has_hard_head, read_json, read_manifest
@@ -74,7 +76,7 @@ def show_info(model_dir):
         for f in feats:
             d = f["direction"]
             t.add_row(
-                f["label"],
+                escape(f["label"]),
                 f"{f['mean_abs_shap']:.3f}",
                 "[red]raises[/]" if d > 0.05 else "[blue]lowers[/]" if d < -0.05 else "[dim]mixed[/]",
             )
