@@ -60,3 +60,28 @@ def nearest(queries, reference):
         idx[start:stop] = j
         T[start:stop] = inter[np.arange(stop - start), j]
     return T, idx
+
+
+def nearest_large(queries, reference, block=50):
+    """:func:`nearest` against a very large reference (the whole library), as reference × queries.
+
+    A sparse library times a small dense block of queries is cheap (~1 s per 50 queries against 1.36M
+    molecules), whereas transposing the library or densifying it is not.
+    """
+    Q = binarize(queries)
+    already_binary = sp.issparse(reference) and reference.format == "csr" and reference.dtype == np.float32
+    R = reference if already_binary and (reference.nnz == 0 or reference.data.max() <= 1) else binarize(reference)
+    r_pop = np.asarray(R.sum(1), dtype=np.float32).ravel()
+    T = np.zeros(Q.shape[0], dtype=np.float32)
+    idx = np.full(Q.shape[0], -1, dtype=np.int64)
+    for start in range(0, Q.shape[0], block):
+        Qd = Q[start : start + block].toarray().T
+        inter = np.asarray(R @ Qd, dtype=np.float32)
+        union = r_pop[:, None] + Qd.sum(0)[None, :]
+        union -= inter
+        np.divide(inter, union, out=inter, where=union > 0)
+        inter[union <= 0] = 0.0
+        j = inter.argmax(0)
+        idx[start : start + block] = j
+        T[start : start + block] = inter[j, np.arange(Qd.shape[1])]
+    return T, idx

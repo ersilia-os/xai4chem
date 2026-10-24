@@ -311,6 +311,37 @@ class XAIModel(object):
         df.loc[~res["_valid"], df.columns[1:]] = np.nan
         return df
 
+    def library_neighbours(self, smiles):
+        """Each molecule's nearest neighbour in the reference library, and what the teacher said about it.
+
+        This is the applicability domain of S: T close to 1 means S was trained on (nearly) this molecule;
+        below ~0.3 it is extrapolating. Returns ``None`` when the library or its Morgan matrix is missing,
+        else a dict with ``T``, ``row``, ``smiles`` and ``teacher`` (per column, on the teacher's scale;
+        NaN where the soft labels did not cover the neighbour).
+        """
+        import h5py
+
+        from xai4chem.run import TARGETS_NAME
+        from xai4chem.similarity import nearest_large
+
+        library = self._library()
+        if library is None or not library.has("morgan"):
+            return None
+        if getattr(self, "_library_fps", None) is None:
+            self._library_fps = binarize(library.csr("morgan", verb="loading library fingerprints"))
+        T, rows = nearest_large(fingerprints(smiles), self._library_fps)
+        teacher = {}
+        targets = self.dir / TARGETS_NAME
+        if targets.exists():
+            with h5py.File(targets, "r") as f:
+                target_rows, Z = f["rows"][:], f["Z"][:]
+            for j, col in enumerate(self.columns):
+                by_row = np.full(len(library), np.nan, dtype=np.float32)
+                ok = target_rows >= 0
+                by_row[target_rows[ok]] = Z[ok, j]
+                teacher[col.name] = inverse(by_row[rows], col.transform)
+        return {"T": T, "row": rows, "smiles": [library.smiles[i] for i in rows], "teacher": teacher}
+
     def _check_golden(self):
         golden = read_json(self.dir / GOLDEN_NAME)
         res = self.explain(golden["smiles"])

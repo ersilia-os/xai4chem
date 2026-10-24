@@ -32,6 +32,8 @@ ABSENT_FEATURES = 3
 BATCH = 500
 MAX_CARDS = 300
 TERMINAL_ROWS = 15
+DOMAIN_MAX = 2000
+DOMAIN_FAR = 0.3
 
 
 def _safe(name):
@@ -43,7 +45,9 @@ def cosine(a, b):
     return float(a @ b / (na * nb)) if na > 0 and nb > 0 else float("nan")
 
 
-def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=False, gallery=True, quiet=False):
+def explain_molecules(
+    model, smiles, output_dir, ids=None, columns=None, png=False, gallery=True, quiet=False, domain=None
+):
     started = time.time()
     color = STEP_COLORS["explain"]
     set_active_color(color)
@@ -65,6 +69,13 @@ def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=Fal
     if invalid:
         echo(f"{len(invalid)} unparseable SMILES are reported with empty predictions", "warning")
 
+    if domain is None:
+        domain = len(smiles) <= DOMAIN_MAX
+    neighbours = model.library_neighbours(smiles) if domain else None
+    if neighbours is not None:
+        for i in invalid:
+            neighbours["T"][i] = np.nan
+
     pred_parts, long_rows, cards = [], [], []
     with sweep_progress("explaining", len(smiles)) as tick:
         for start in range(0, len(smiles), BATCH):
@@ -78,11 +89,19 @@ def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=Fal
                 if b_mols[i] is None:
                     continue
                 if gallery and len(cards) < MAX_CARDS:
-                    cards.append(_card(model, cols, res, i, b_ids[i], b_smi[i], b_mols[i], X[i], labels))
+                    nb = _neighbour(neighbours, start + i)
+                    cards.append(_card(model, cols, res, i, b_ids[i], b_smi[i], b_mols[i], X[i], labels, nb))
                 if png:
                     _png(model, cols, res, i, b_ids[i], b_mols[i], output_dir / "png")
             tick(stop)
     pred = pd.concat(pred_parts, ignore_index=True)
+    if neighbours is not None:
+        pred["library_T"] = neighbours["T"]
+        pred["library_nearest_smiles"] = neighbours["smiles"]
+        for col in cols:
+            if col.name in neighbours["teacher"]:
+                pred[f"{col.name}_library_teacher"] = neighbours["teacher"][col.name]
+        pred.loc[~pred["valid"], ["library_T", "library_nearest_smiles"]] = np.nan
     pred.to_csv(output_dir / "predictions.csv", index=False)
     pd.DataFrame(long_rows).to_csv(output_dir / "attributions.csv", index=False)
     if gallery:
@@ -91,6 +110,11 @@ def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=Fal
             echo(f"the gallery shows the first {MAX_CARDS} molecules; the CSV files have all {len(smiles):,}", "info")
     if not quiet:
         _terminal_table(cols, pred, long_rows)
+        if neighbours is not None:
+            T = pred["library_T"].dropna()
+            far = int((T < DOMAIN_FAR).sum())
+            note = f" · [yellow]{far} below {DOMAIN_FAR} (S extrapolates)[/]" if far else ""
+            echo(f"applicability · median Tanimoto to the nearest library molecule {T.median():.2f}{note}", "info")
         rows_out = [("Molecules", f"{len(smiles):,}"), ("Columns", ", ".join(c.name for c in cols))]
         rows_out.append(("Tables", f"[dim]{cpath(output_dir)}/predictions.csv · attributions.csv[/]"))
         if gallery:
@@ -159,7 +183,17 @@ def _views(model, col, r, i, mol):
     return views, s[1]
 
 
-def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
+def _neighbour(neighbours, k):
+    if neighbours is None or not np.isfinite(neighbours["T"][k]):
+        return None
+    return {
+        "T": float(neighbours["T"][k]),
+        "smiles": neighbours["smiles"][k],
+        "teacher": {c: float(v[k]) for c, v in neighbours["teacher"].items()},
+    }
+
+
+def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels, nb=None):
     drawn = prepare(mol)
     parts = [
         f'<div class="card molcard" id="m-{_safe(mol_id)}"><div class="head"><b>{H.esc(mol_id)}</b>'
@@ -214,6 +248,14 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
                     f'<span class="smi">{H.esc(col.hard.labelled_smiles[j])}</span> · label {col.hard.labels[j]:g}. '
                     f"Agreement between teacher and experiments: {cosine(r['phi_S'][i], r['phi_HS'][i]):+.2f}.</p>"
                 )
+        if nb is not None:
+            teacher = nb["teacher"].get(col.name, float("nan"))
+            said = f" · teacher {teacher:.3f}" if np.isfinite(teacher) else ""
+            warn = " S is extrapolating here." if nb["T"] < DOMAIN_FAR else ""
+            side = (
+                f'<p class="muted" style="font-size:12px">Nearest library molecule (T = {nb["T"]:.2f}): '
+                f'<span class="smi">{H.esc(nb["smiles"])}</span>{said}.{warn}</p>'
+            ) + side
         note = ""
         if views is not None and abs(views[1]) > 1e-3:
             note = f'<p class="faint" style="font-size:11.5px">Absent features contribute {views[1]:+.3f}; they have no atoms to sit on.</p>'

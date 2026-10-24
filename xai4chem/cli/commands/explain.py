@@ -18,10 +18,26 @@ from xai4chem.cli import options
 @click.option("--id-column", default=None, help="Column naming each molecule (default: mol_0000, mol_0001, …).")
 @click.option("--png", is_flag=True, help="Also write atom-highlight PNGs per molecule.")
 @click.option("--gallery/--no-gallery", default=True, show_default=True, help="Write the HTML gallery.")
+@click.option(
+    "--domain/--no-domain",
+    default=None,
+    help="Find each molecule's nearest library molecule and the teacher's value for it (default: on for up to "
+    "2,000 molecules; costs ~10 s to load the library fingerprints).",
+)
 @click.option("--open", "open_browser", is_flag=True, help="Open the gallery in a browser when done.")
 @options.friendly_errors
 def explain_cmd(
-    model_dir, input_file, smiles_list, output_dir, columns, smiles_column, id_column, png, gallery, open_browser
+    model_dir,
+    input_file,
+    smiles_list,
+    output_dir,
+    columns,
+    smiles_column,
+    id_column,
+    png,
+    gallery,
+    domain,
+    open_browser,
 ):
     """Predict and explain individual molecules: which atoms and features push each prediction, and how.
 
@@ -33,7 +49,14 @@ def explain_cmd(
 
     smiles, ids = options.load_molecules(input_file, smiles_list, smiles_column, id_column)
     explain_molecules(
-        XAIModel(model_dir), smiles, output_dir, ids=ids, columns=options.split(columns), png=png, gallery=gallery
+        XAIModel(model_dir),
+        smiles,
+        output_dir,
+        ids=ids,
+        columns=options.split(columns),
+        png=png,
+        gallery=gallery,
+        domain=domain,
     )
     if open_browser and gallery:
         import webbrowser

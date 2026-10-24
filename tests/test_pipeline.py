@@ -156,6 +156,9 @@ def test_commands(fitted):
     run(["explain", "-m", model_dir, "-i", root / "q.csv", "-o", out, "--id-column", "name", "--png"])
     pred = pd.read_csv(out / "predictions.csv")
     assert {"activity", "activity_S", "activity_HS", "activity_a", "activity_nearest_smiles"} <= set(pred.columns)
+    assert {"library_T", "library_nearest_smiles", "activity_library_teacher"} <= set(pred.columns)
+    # Library molecules are their own nearest neighbours, and the teacher's value is the soft label
+    assert pred.loc[pred.id == "anilide", "library_T"].iloc[0] <= 1.0
     assert not pred.loc[pred.id == "bad", "valid"].iloc[0]
     assert (out / "index.html").exists() and "anilide" in (out / "index.html").read_text()
     if featurizer != "datamol":
