@@ -76,9 +76,14 @@ In both cases the atom scores sum exactly to the attribution of the features *pr
 rest is the effect of *absent* features: TreeSHAP scores them too, but they have no atoms to sit on. It is
 reported as a separate number.
 
-**Folded Morgan bits collide.** `setup` therefore builds a **bit dictionary**:
+**Folded Morgan bits collide.** Per-molecule outputs therefore name each present bit by the environment that
+sets it *in that molecule*. For global summaries, `setup` builds a **bit dictionary**:
 - every substructure that sets each bit, counted over 100,000 library molecules
 - each bit named by its most common substructure and that substructure's share, e.g. `bit 1683: Cl (76%)`
+  - single atoms are written as SMARTS with the Morgan invariants: `[cH;D2;R]` is an aromatic CH with
+    two neighbours, in a ring
+  - when the top substructure covers less than half of a bit's occurrences, the runner-up is named as
+    well
 - a collision rate: the share of the bit's occurrences that come from other substructures
 
 ## What is precomputed, and where

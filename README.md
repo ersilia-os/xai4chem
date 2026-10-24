@@ -93,7 +93,9 @@ model.predict(["CCO", "c1ccccc1O"])                 # P on the teacher's scale
 res = model.explain(["c1ccccc1O"])["my_column"]     # S, φ_S, P, φ_P (+ H_S, φ_HS, T, a)
 ```
 
-How it works, the outputs, and what to precompute are described in [docs/](docs/).
+On the full Ersilia library a Morgan fit takes about 3 minutes, and scoring all 1.36M molecules takes
+about a minute ([benchmarks](docs/benchmarks.md)). How it works, the outputs, and what is precomputed are
+described in [docs/](docs/).
 
 ## About the Ersilia Open Source Initiative
 
