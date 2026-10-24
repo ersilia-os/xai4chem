@@ -23,6 +23,7 @@ import h5py
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
+from rich.markup import escape
 
 from xai4chem.console import (
     STEP_COLORS,
@@ -158,7 +159,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
         echo(f"ignoring columns that match no soft-label column: {', '.join(map(str, ignored))}", "warning")
     for hard, soft in mapping.items():
         if hard != soft:
-            echo(f"hard column [bold]{hard}[/] refines soft column [bold]{soft}[/]", "info")
+            echo(f"hard column [bold]{escape(hard)}[/] refines soft column [bold]{escape(soft)}[/]", "info")
 
     echo(f"featurizing {len(smiles):,} labelled molecules ({featurizer.name})", "run")
     X = featurizer.transform_raw(smiles)
@@ -211,7 +212,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             table.update(hard_name, Task=task, Labels=labels_text)
             if len(y) < MIN_HARD_ROWS or (task == "binary" and min((y == 0).sum(), (y == 1).sum()) < MIN_PER_CLASS):
                 table.finish(hard_name, ok=False, CV="too few", Time=elapsed(time.time() - col_started))
-                echo(f"[{hard_name}] too few hard labels ({len(y)}); the column stays soft-only", "warning")
+                echo(f"{escape(hard_name)}: too few hard labels ({len(y)}); the column stays soft-only", "warning")
                 continue
             booster, cv = train_hard_model(Xh, y, task, featurizer.sparse, seed)
             table.update(hard_name, CV=_cv_text(cv))
@@ -221,7 +222,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             ok = np.where(np.isfinite(z) & ((target_rows >= 0) | np.isin(np.arange(len(z)), list(extra))))[0]
             if len(ok) < 20:
                 raise ValueError(
-                    f"[{hard_name}] only {len(ok)} soft-labelled molecules: the isotonic map needs the teacher's "
+                    f"{escape(hard_name)}: only {len(ok)} soft-labelled molecules: the isotonic map needs the teacher's "
                     "scores (re-run learn-soft with this version of xai4chem if the model predates it)."
                 )
             ok = np.random.default_rng(seed).permutation(ok)[:ISOTONIC_ROWS]
@@ -241,7 +242,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             }
             alignment_r2 = float(r2_score(z[ok[half:]], apply_isotonic(h_lib[half:], iso_map)))
             logger.debug(
-                f"[{hard_name}] isotonic map: {len(iso_map['x'])} knots from {half:,} molecules, judged on "
+                f"{escape(hard_name)}: isotonic map: {len(iso_map['x'])} knots from {half:,} molecules, judged on "
                 f"{len(ok) - half:,} · CV {cv}"
             )
             a_max = blend_ceiling(alignment_r2)
@@ -293,7 +294,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             )
             if a_max == 0.0:
                 echo(
-                    f"[{hard_name}] H_S does not reproduce the teacher's scale (R² {alignment_r2:.2f}); "
+                    f"{escape(hard_name)}: H_S does not reproduce the teacher's scale (R² {alignment_r2:.2f}); "
                     "P stays equal to S, but H's explanations are still reported",
                     "warning",
                 )

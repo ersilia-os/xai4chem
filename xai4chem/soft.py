@@ -20,6 +20,7 @@ from pathlib import Path
 
 import h5py
 import numpy as np
+from rich.markup import escape
 from scipy.stats import spearmanr
 
 from xai4chem import __version__
@@ -362,12 +363,12 @@ def learn_soft(
             mask = np.isfinite(y)
             if mask.sum() < MIN_SOFT_ROWS:
                 table.finish(name, ok=False, Rows=f"{int(mask.sum()):,}", Time="skipped")
-                echo(f"[{name}] only {int(mask.sum())} finite soft labels; column skipped", "warning")
+                echo(f"{escape(name)}: only {int(mask.sum())} finite soft labels; column skipped", "warning")
                 continue
             t = choose_transform(y, transform)
             z = forward(y[mask], t)
             if np.ptp(z) == 0:
-                echo(f"[{name}] the teacher's output is constant; S will be too, and explain nothing", "warning")
+                echo(f"{escape(name)}: the teacher's output is constant; S will be too, and explain nothing", "warning")
             Z[mask, j] = z
             Xm = X[np.where(mask)[0]] if not mask.all() else X
             table.update(name, Scale=t, Rows=f"{int(mask.sum()):,}")

@@ -49,6 +49,8 @@ def fidelity_hexbin(ax, stylia, teacher, surrogate, transform):
     ax.hexbin(teacher, surrogate, gridsize=40, cmap=cmap, mincnt=1, linewidths=0, norm=LogNorm())
     lo = float(min(np.min(teacher), np.min(surrogate)))
     hi = float(max(np.max(teacher), np.max(surrogate)))
+    if hi - lo < 1e-9:  # a constant teacher: give the axes some room rather than a singular range
+        lo, hi = lo - 0.5, hi + 0.5
     ax.plot([lo, hi], [lo, hi], linestyle="--", color=_article(stylia, "silver"), zorder=0)
     ax.set_xlim(lo, hi)
     ax.set_ylim(lo, hi)
