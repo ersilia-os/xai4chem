@@ -71,10 +71,32 @@ piped. Never print one line per chunk.
   - Large row selections use contiguous chunk reads, never h5py point selection.
 - **Threads.** `soft.n_threads` scales with data size. Small fits are slower with all cores.
 - **Trimming.** Boosters are trimmed to their best iteration after early stopping.
+- **Validation split.** It is a plain `xgb.DMatrix`, never a `QuantileDMatrix`. XGBoost 2.0 does not cache
+  eval predictions for the latter, which made training 20× slower (measured).
+- **Library reuse at inference.** `XAIModel.features` reads precomputed library rows for inputs of ≥50k
+  molecules (exact or canonical SMILES match, featurizer configs identical) and featurizes only the rest,
+  in workers.
+- **Nearest-neighbour search.**
+  - `similarity.nearest` (the gate) uses dense BLAS, because intersections are ~100% nonzero.
+  - `nearest_large` (applicability against the whole library) uses threaded sparse × dense products,
+    reduced per block.
+  - Both are tested against RDKit and against each other.
+  - The library's binary fingerprints are cached as `morgan_bits_*.npy` by `setup`.
 - **Batching.** `XAIModel.explain` is dense (n × features). Batch it; `predict`/`scores` skip attributions
   for large inputs.
 - **stylia.** It must be imported through `reporting.figures.import_stylia()`. stylia 1.0.1 wipes
   matplotlib's font cache at import, which costs ~12 s per run otherwise.
+
+## Explanations: details that matter
+
+- **Per-molecule Morgan labels.** Folded bits collide, so per-molecule outputs name a present bit by the
+  environment that sets it *in that molecule* (`featurizer.molecule_labels`). The library-wide bit
+  dictionary name is only for global summaries and absent bits.
+- **Atom maps.** Scores sum exactly to the attribution of the features present. Absent features are
+  reported separately, never smeared onto atoms.
+- **Scales.** Attributions are on the model scale (logit for probabilities). Prediction tables (`_S`,
+  `_HS`) are on the teacher's scale, identical between `explain` and `predict`.
+- **Invalid SMILES.** They keep their row and get NaN everywhere, including applicability columns.
 
 ## Data
 
