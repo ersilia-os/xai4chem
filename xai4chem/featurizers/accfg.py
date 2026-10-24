@@ -110,6 +110,10 @@ class AccFgFingerprint(object):
         """SMARTS pattern → feature index."""
         return ref_smarts()
 
+    def molecule_labels(self, mol):
+        """Feature labels do not depend on the molecule for this featurizer."""
+        return {}
+
     def to_config(self):
         """A JSON-serialisable description, stored in model and library manifests."""
         return {"name": self.name, "n_features": len(self.feature_names)}

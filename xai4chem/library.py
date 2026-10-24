@@ -32,7 +32,7 @@ import numpy as np
 from xai4chem.console import echo, filesize, live_status, status_line, success, sweep_progress
 from xai4chem.console import path as cpath
 from xai4chem.featurizers import featurizer_from_config, get_featurizer
-from xai4chem.featurizers.morgan import COUNT_CLIP, NBITS, RADIUS
+from xai4chem.featurizers.morgan import COUNT_CLIP, NBITS, RADIUS, fragment_smiles
 
 SCHEMA = "xai4chem.library.v1"
 LIBRARY_JSON = "library.json"
@@ -163,36 +163,6 @@ def write_matrix(path, featurizer, smiles, n_jobs=1):
     tmp.replace(path)
 
 
-def _atom_label(atom):
-    """A radius-0 environment as SMARTS: element, hydrogens, charge, degree and ring membership.
-
-    These are the Morgan atom invariants, so different radius-0 bits get different names (a bare "C"
-    would name half a dozen bits).
-    """
-    sym = atom.GetSymbol().lower() if atom.GetIsAromatic() else atom.GetSymbol()
-    h = atom.GetTotalNumHs()
-    hs = f"H{h}" if h > 1 else ("H" if h == 1 else "")
-    q = atom.GetFormalCharge()
-    charge = "" if q == 0 else ("+" if q == 1 else "-" if q == -1 else f"{q:+d}")
-    ring = ";R" if atom.IsInRing() else ""
-    return f"[{sym}{hs}{charge};D{atom.GetDegree()}{ring}]"
-
-
-def _fragment(mol, center, radius):
-    from rdkit import Chem
-
-    if radius == 0:
-        return _atom_label(mol.GetAtomWithIdx(center))
-    bonds = list(Chem.FindAtomEnvironmentOfRadiusN(mol, radius, center))
-    if not bonds:
-        return _atom_label(mol.GetAtomWithIdx(center))
-    atoms = set()
-    for b in bonds:
-        bond = mol.GetBondWithIdx(b)
-        atoms.update((bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()))
-    return Chem.MolFragmentToSmiles(mol, atomsToUse=sorted(atoms), bondsToUse=bonds)
-
-
 def _bit_fragments_chunk(smiles):
     from collections import Counter
 
@@ -209,7 +179,7 @@ def _bit_fragments_chunk(smiles):
         for bit, occ in morgan_bit_info(mol).items():
             c = counts.setdefault(bit, Counter())
             for center, radius in occ:
-                c[(radius, _fragment(mol, center, radius))] += 1
+                c[(radius, fragment_smiles(mol, center, radius))] += 1
     return counts
 
 

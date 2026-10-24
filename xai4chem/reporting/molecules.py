@@ -73,7 +73,7 @@ def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=Fal
             X = model.featurize(b_smi)
             res = model.explain(b_smi, X=X, columns=[c.name for c in cols])
             pred_parts.append(_prediction_rows(cols, res, b_ids, b_smi, b_mols))
-            long_rows.extend(_attribution_rows(cols, res, X, b_ids, b_mols, labels, names))
+            long_rows.extend(_attribution_rows(cols, res, X, b_ids, b_mols, labels, names, model.featurizer))
             for i in range(stop - start):
                 if b_mols[i] is None:
                     continue
@@ -120,7 +120,7 @@ def _prediction_rows(cols, res, ids, smiles, mols):
     return df
 
 
-def _attribution_rows(cols, res, X, ids, mols, labels, names):
+def _attribution_rows(cols, res, X, ids, mols, labels, names, featurizer):
     rows = []
     for col in cols:
         r = res[col.name]
@@ -128,13 +128,14 @@ def _attribution_rows(cols, res, X, ids, mols, labels, names):
             if mols[i] is None:
                 continue
             phi = r["phi_P"][i]
+            local = featurizer.molecule_labels(mols[i])
             keep = set(np.nonzero(X[i])[0]) | set(np.argsort(-np.abs(phi))[:TOP_FEATURES])
             for f in sorted(keep, key=lambda f: -abs(phi[f])):
                 row = {
                     "id": ids[i],
                     "column": col.name,
                     "feature": names[f],
-                    "label": labels[f],
+                    "label": local.get(f, labels[f]),
                     "value": float(X[i, f]),
                     "phi_S": float(r["phi_S"][i, f]),
                 }
@@ -199,7 +200,8 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
         present = [f for f in order if x_row[f] > 0 and phi[f] != 0][:CARD_FEATURES]
         absent = [f for f in order if x_row[f] == 0 and phi[f] != 0][:ABSENT_FEATURES]
         scale = max([abs(float(phi[f])) for f in present + absent] or [1.0])
-        bars = H.contributions([(labels[f], float(phi[f])) for f in present], scale=scale)
+        local = model.featurizer.molecule_labels(mol)
+        bars = H.contributions([(local.get(f, labels[f]), float(phi[f])) for f in present], scale=scale)
         if absent and model.featurizer.sparse:
             bars += '<div class="faint" style="font-size:11px;margin:8px 0 4px">Strongest absent features</div>'
             bars += H.contributions([(labels[f], float(phi[f])) for f in absent], scale=scale)
@@ -310,7 +312,8 @@ def _terminal_table(cols, pred, long_rows):
         tops = []
         for fr in feats:
             v = fr.get("phi_P", fr["phi_S"])
-            tops.append(f"[{'red' if v > 0 else 'blue'}]{v:+.2f}[/] {escape(fr['label'][:28])}")
+            absent = "[dim]absent[/] " if fr["value"] == 0 else ""
+            tops.append(f"[{'red' if v > 0 else 'blue'}]{v:+.2f}[/] {absent}{escape(fr['label'][:28])}")
         cells.append("  ".join(tops))
         table.add_row(*cells)
     console.print(table)

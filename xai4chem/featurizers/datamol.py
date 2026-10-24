@@ -68,6 +68,10 @@ class DatamolDescriptor(object):
         """For each feature present in ``mol``, the atom-index tuples of its occurrences."""
         return None
 
+    def molecule_labels(self, mol):
+        """Feature labels do not depend on the molecule for this featurizer."""
+        return {}
+
     def to_config(self):
         """A JSON-serialisable description, stored in model and library manifests."""
         return {"name": self.name, "columns": self.columns, "medians": self.medians}
