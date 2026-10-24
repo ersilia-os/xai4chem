@@ -55,7 +55,7 @@ One row per feature, sorted by importance:
   Unparseable SMILES keep their row, with `valid = False`.
 - `attributions.csv` is in long format: molecule × column × feature, with `value`, `phi_S` (and `phi_HS`,
   `phi_P`). It covers every feature present in the molecule plus the strongest absent ones.
-- `index.html` is a filterable gallery with one card per molecule (the first 300). Each card has:
+- `index.html` is a filterable gallery with one card per molecule (the first 100; `--cards`). Each card has:
   - the prediction, S, H_S and `a`
   - the atom maps
   - the top contributions
