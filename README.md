@@ -65,7 +65,7 @@ The input files:
 | `setup` | Prepare the reference library: feature matrices, explanation panel, Morgan bit dictionary |
 | `library` | Write the library SMILES for the teacher to score |
 | `fit` | Run learn-soft → [learn-hard] → explain-global → report |
-| `explain` | Explain molecules: predictions, attributions, an HTML gallery (and PNGs with `--png`) |
+| `explain` | Explain molecules: predictions, attributions, the nearest library molecule, an HTML gallery (and PNGs with `--png`) |
 | `predict` | Score molecules fast, without explanations |
 | `report` | Write the self-contained HTML model report |
 | `info` | Show a model card in the terminal |

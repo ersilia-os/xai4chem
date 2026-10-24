@@ -64,6 +64,17 @@ The explanation gallery shows four atom maps per molecule, all on one colour sca
 - combined (P)
 - **disagreement** (H_S − S): the atoms where the measurements tell a different story from the teacher
 
+## Applicability domain
+
+S learned the teacher over the reference library, so it is most trustworthy for molecules that resemble
+library molecules. For every explained molecule, `explain` therefore finds the nearest molecule in the
+whole library (exact Tanimoto on binary Morgan, computed as library × queries) and reports:
+- its similarity
+- the teacher's own value for it
+
+A molecule far from everything in the library (T below ~0.3) gets a warning in the gallery. A large gap
+between S's prediction and the teacher's value for a close neighbour is a hint to look closer.
+
 ## From features to atoms
 
 **Morgan bits.** A bit's attribution is split evenly over its occurrences in the molecule and placed on each

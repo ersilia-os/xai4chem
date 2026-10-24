@@ -45,6 +45,13 @@ One row per feature, sorted by importance:
     - `_nearest_smiles` and `_nearest_label`
     - `_agreement`: the cosine of φ_S and φ_HS, from −1 (opposite) to 1 (same story)
 
+  - with the applicability check (on by default for up to 2,000 molecules; `--domain/--no-domain`):
+    - `library_T`: Tanimoto similarity to the nearest molecule in the reference library
+    - `library_nearest_smiles`
+    - `<column>_library_teacher`: the teacher's own value for that neighbour
+
+    T near 1 means S was trained on (nearly) this molecule; below ~0.3, S is extrapolating.
+
   Unparseable SMILES keep their row, with `valid = False`.
 - `attributions.csv` is in long format: molecule × column × feature, with `value`, `phi_S` (and `phi_HS`,
   `phi_P`). It covers every feature present in the molecule plus the strongest absent ones.
