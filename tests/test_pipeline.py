@@ -320,3 +320,30 @@ def test_soft_labels_outside_the_library(library, tmp_path):
         ]
     )
     assert XAIModel(tmp_path / "m").column("activity").hard is not None
+
+
+def test_empty_teacher_column_is_skipped(library, tmp_path):
+    root, lib = library
+    soft = pd.read_csv(root / "soft.csv")
+    soft.insert(1, "broken", np.nan)  # before the real columns, so ids and positions would disagree
+    soft.to_csv(tmp_path / "soft_broken.csv", index=False)
+    run(
+        [
+            "fit",
+            "-s",
+            tmp_path / "soft_broken.csv",
+            "-h",
+            root / "hard.csv",
+            "--library-dir",
+            lib,
+            "-m",
+            tmp_path / "m",
+            "--n-estimators",
+            150,
+        ]
+    )
+    model = XAIModel(tmp_path / "m")
+    assert model.column_names == ["activity", "noisy"]
+    assert model.column("activity").hard is not None
+    nb = model.library_neighbours(QUERIES[:1])
+    assert np.isfinite(nb["teacher"]["activity"][0])

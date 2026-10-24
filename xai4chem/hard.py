@@ -176,7 +176,8 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
                     [s.decode() if isinstance(s, bytes) else s for s in f["extra_smiles"][:]],
                 )
             )
-    col_index = {c["id"]: j for j, c in enumerate(manifest["columns"])}
+    # Z keeps one column per soft-label column, skipped ones included, so index it by the id (c<j>)
+    col_index = {c["id"]: int(c["id"][1:]) for c in manifest["columns"]}
 
     panel = library.panel()
     panel_fps = library.csr("morgan", panel, verb="reading panel fingerprints") if library.has("morgan") else None

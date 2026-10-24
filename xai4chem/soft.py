@@ -54,6 +54,7 @@ from xai4chem.run import (
 )
 
 EPS = 1e-4
+MIN_SOFT_ROWS = 100
 VAL_FRAC = 0.1
 STABILITY_ROWS = 3000
 FIDELITY_POINTS = 50000
@@ -344,6 +345,10 @@ def learn_soft(
             col_started = time.time()
             y = Y.iloc[:, j].to_numpy(dtype=np.float64)
             mask = np.isfinite(y)
+            if mask.sum() < MIN_SOFT_ROWS:
+                table.finish(name, ok=False, Rows=f"{int(mask.sum()):,}", Time="skipped")
+                echo(f"[{name}] only {int(mask.sum())} finite soft labels; column skipped", "warning")
+                continue
             t = choose_transform(y, transform)
             z = forward(y[mask], t)
             Z[mask, j] = z
@@ -401,6 +406,8 @@ def learn_soft(
                 },
             )
 
+    if not columns:
+        raise ValueError(f"No column of {soft_labels} has at least {MIN_SOFT_ROWS} finite soft labels.")
     with h5py.File(model_dir / TARGETS_NAME, "w") as f:
         f.create_dataset("rows", data=rows)
         f.create_dataset("Z", data=Z)

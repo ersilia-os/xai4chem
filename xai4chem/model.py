@@ -344,7 +344,8 @@ class XAIModel(object):
         if targets.exists():
             with h5py.File(targets, "r") as f:
                 target_rows, Z = f["rows"][:], f["Z"][:]
-            for j, col in enumerate(self.columns):
+            for col in self.columns:
+                j = int(col.id[1:])  # Z has one column per soft-label column, skipped ones included
                 by_row = np.full(len(library), np.nan, dtype=np.float32)
                 ok = target_rows >= 0
                 by_row[target_rows[ok]] = Z[ok, j]
