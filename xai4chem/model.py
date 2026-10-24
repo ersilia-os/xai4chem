@@ -334,7 +334,7 @@ class XAIModel(object):
         if library is None or not library.has("morgan"):
             return None
         if getattr(self, "_library_fps", None) is None:
-            self._library_fps = binarize(library.csr("morgan", verb="loading library fingerprints"))
+            self._library_fps = library.morgan_bits()
         T, rows = nearest_large(fingerprints(smiles), self._library_fps)
         valid = valid_mask(smiles)
         T = np.where(valid, T, np.nan)

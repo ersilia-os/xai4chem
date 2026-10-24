@@ -38,6 +38,8 @@ SCHEMA = "xai4chem.library.v1"
 LIBRARY_JSON = "library.json"
 PANEL_NAME = "panel.npy"
 BIT_DICTIONARY_NAME = "bit_dictionary.json"
+MORGAN_BITS_INDICES = "morgan_bits_indices.npy"
+MORGAN_BITS_INDPTR = "morgan_bits_indptr.npy"
 PANEL_SIZE = 50000
 BIT_DICTIONARY_MOLS = 100000
 DATAMOL_FIT_MOLS = 50000
@@ -304,6 +306,11 @@ def setup_library(
         bd = compute_bit_dictionary([smiles[i] for i in idx], n_jobs=n_jobs)
         (library_dir / BIT_DICTIONARY_NAME).write_text(json.dumps(bd))
         success(f"bit dictionary → [dim]{cpath(library_dir / BIT_DICTIONARY_NAME)}[/]")
+    if "morgan" in manifest["features"] and (force or not (library_dir / MORGAN_BITS_INDICES).exists()):
+        for stale in (library_dir / MORGAN_BITS_INDICES, library_dir / MORGAN_BITS_INDPTR):
+            stale.unlink(missing_ok=True)
+        ReferenceLibrary(library_dir).morgan_bits()  # re-read: the manifest has grown since
+        success("binary fingerprints cached for nearest-neighbour search")
     return library_dir
 
 
@@ -479,6 +486,29 @@ class ReferenceLibrary(object):
         inverse = np.empty_like(order)
         inverse[order] = np.arange(len(order))
         return X[inverse]
+
+    def morgan_bits(self):
+        """Binary Morgan fingerprints of the whole library, as float32 CSR (for nearest-neighbour search).
+
+        Built from the count matrix the first time (~10 s) and cached in the library directory as the CSR
+        index arrays (~0.4 GB for the Ersilia library), which then load in about a second.
+        """
+        import scipy.sparse as sp
+
+        from xai4chem.similarity import binarize
+
+        indices_path, indptr_path = self.dir / MORGAN_BITS_INDICES, self.dir / MORGAN_BITS_INDPTR
+        if indices_path.exists() and indptr_path.exists():
+            indices, indptr = np.load(indices_path), np.load(indptr_path)
+            data = np.ones(len(indices), dtype=np.float32)
+            return sp.csr_matrix((data, indices, indptr), shape=(len(indptr) - 1, NBITS))
+        X = binarize(self.csr("morgan", verb="loading library fingerprints"))
+        try:
+            np.save(indices_path, X.indices.astype(np.int16))
+            np.save(indptr_path, X.indptr.astype(np.int64))
+        except OSError:
+            pass  # a read-only library still works, just without the cache
+        return X
 
     def panel(self):
         """Row indices of the explanation panel."""

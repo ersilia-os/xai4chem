@@ -109,7 +109,8 @@ sets it *in that molecule*. For global summaries, `setup` builds a **bit diction
 | `accfg.h5` | AccFG counts, uint8 | 0.7 GB |
 | `datamol.h5` | datamol descriptors, float32 | 0.1 GB |
 | `panel.npy` | 50,000 random library rows for global explanations | — |
-| `bit_dictionary.json` | Morgan bit names and collision rates | ~10 MB |
+| `bit_dictionary.json` | Morgan bit names and collision rates | ~2 MB |
+| `morgan_bits_*.npy` | Binary Morgan fingerprints as CSR index arrays, for the applicability search | 0.2 GB |
 
 These files are model-independent, so they are what an eosvc data folder (or a public bucket, like
 Olinda's) should hold. Anything model-specific lives in the model directory. A custom library is a CSV of
