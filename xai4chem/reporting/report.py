@@ -79,6 +79,23 @@ def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
     return H.table(headers, rows, numeric=(2, 4, 5, 6) if counts else (2,))
 
 
+def _chemotype_html(chemo):
+    rows = []
+    for _, r in chemo.iterrows():
+        drawing = fragment_svg(r["scaffold"], size=64)
+        rows.append(
+            [
+                f'<div class="frag">{drawing}</div>' if drawing else "",
+                f'<span class="smi">{H.esc(r["scaffold"])}</span>',
+                f"{int(r['n']):,}",
+                _f(r["mean_teacher"]),
+                _f(r["mean_S"]),
+                H.esc(r["top_features"]),
+            ]
+        )
+    return H.table(["", "Scaffold", "Molecules", "Teacher", "S", "What drives S"], rows, numeric=(2, 3, 4))
+
+
 def _training_details(model_dir, col):
     """A collapsed block with what S was trained on and how: rows, trees, scale, boosting parameters."""
     meta = read_json(column_dir(model_dir, col["id"]) / "soft_meta.json")
@@ -183,6 +200,15 @@ def write_report(model_dir, output, open_browser=False):
             '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
             + _top_table(top_s, featurizer, bit_dictionary, smarts)
         )
+        if (exp / "chemotypes.csv").exists():
+            chemo = pd.read_csv(exp / "chemotypes.csv")
+            if len(chemo):
+                content.append(
+                    '<h3 style="margin-top:18px; font-size:13px">Chemotypes</h3>'
+                    '<p class="faint" style="font-size:11.5px;margin:0 0 6px">The most common Bemis–Murcko scaffolds '
+                    "of the panel: how the teacher and S score them, and what drives S within each.</p>"
+                    + _chemotype_html(chemo)
+                )
         content.append(_training_details(model_dir, col))
         substructures = _substructure_rows(top_s, bit_dictionary) if featurizer == "morgan" else None
         if substructures is not None and len(substructures):

@@ -131,6 +131,9 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
         library.csr("morgan", rows, verb="reading panel fingerprints") if any(c.hard for c in model.columns) else None
     )
 
+    groups, scaffolds = _scaffold_groups([library.smiles[i] for i in rows])
+    teacher_z = _teacher_on_rows(model, rows)
+
     summaries = []
     with LiveTable(
         model.column_names,
@@ -147,10 +150,17 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
             out.mkdir(parents=True, exist_ok=True)
             acc = _Accumulator(len(names))
             phi_plot = []
+            S_panel = np.zeros(len(rows))
+            group_abs = np.zeros((len(scaffolds), len(names)))
             for start in range(0, len(rows), CHUNK):
                 Xc = X_panel[start : start + CHUNK]
-                phi = contributions(col.s, Xc, model.sparse)[:, :-1]
+                c = contributions(col.s, Xc, model.sparse)
+                phi = c[:, :-1]
+                S_panel[start : start + len(c)] = c.sum(1)
                 acc.add(_dense(Xc).astype(np.float64), phi)
+                g = groups[start : start + len(c)]
+                inside = g >= 0
+                np.add.at(group_abs, g[inside], np.abs(phi[inside]))
                 sel = plot_idx[(plot_idx >= start) & (plot_idx < start + CHUNK)] - start
                 phi_plot.append(phi[sel])
             tab = acc.table(names, labels, collisions)
@@ -161,6 +171,10 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
                 out, "s", np.vstack(phi_plot), _dense(X_panel[plot_idx]), importance, direction, labels
             )
             _fidelity_figure(col, out)
+            chemotypes = _chemotype_table(
+                scaffolds, groups, group_abs, S_panel, teacher_z.get(col.id), col.transform, labels
+            )
+            chemotypes.to_csv(out / "chemotypes.csv", index=False)
             summary = {
                 "name": col.name,
                 "panel_size": int(len(rows)),
@@ -231,6 +245,76 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
     ]
     summary_panel("xai4chem · explain-global", rows_out, border_style=color, icon="✓")
     return model
+
+
+MIN_SCAFFOLD = 8
+TOP_SCAFFOLDS = 15
+
+
+def _scaffold_groups(smiles):
+    """Bemis–Murcko scaffold per molecule; the most common ones (≥ MIN_SCAFFOLD members) become groups."""
+    from collections import Counter
+
+    from rdkit import Chem
+    from rdkit.Chem.Scaffolds import MurckoScaffold
+
+    keys = []
+    for smi in smiles:
+        mol = Chem.MolFromSmiles(smi)
+        try:
+            scaffold = MurckoScaffold.MurckoScaffoldSmiles(mol=mol) if mol is not None else ""
+        except Exception:
+            scaffold = ""
+        keys.append(scaffold)
+    counts = Counter(k for k in keys if k)  # acyclic molecules have an empty scaffold
+    common = [k for k, n in counts.most_common(TOP_SCAFFOLDS) if n >= MIN_SCAFFOLD]
+    index = {k: i for i, k in enumerate(common)}
+    return np.array([index.get(k, -1) for k in keys]), common
+
+
+def _teacher_on_rows(model, rows):
+    """Teacher values (model scale) for library rows, per column id, where the soft labels covered them."""
+    import h5py
+
+    from xai4chem.run import TARGETS_NAME
+
+    path = model.dir / TARGETS_NAME
+    if not path.exists():
+        return {}
+    with h5py.File(path, "r") as f:
+        target_rows, Z = f["rows"][:], f["Z"][:]
+    lookup = {int(r): i for i, r in enumerate(target_rows) if r >= 0}
+    pos = np.array([lookup.get(int(r), -1) for r in rows])
+    out = {}
+    for col in model.columns:
+        j = int(col.id[1:])
+        values = np.full(len(rows), np.nan)
+        values[pos >= 0] = Z[pos[pos >= 0], j]
+        out[col.id] = values
+    return out
+
+
+def _chemotype_table(scaffolds, groups, group_abs, S_panel, teacher, transform, labels):
+    from xai4chem.soft import inverse
+
+    rows = []
+    for i, scaffold in enumerate(scaffolds):
+        members = groups == i
+        n = int(members.sum())
+        top = np.argsort(-group_abs[i])[:3]
+        mean_teacher = (
+            np.nanmean(teacher[members]) if teacher is not None and np.isfinite(teacher[members]).any() else np.nan
+        )
+        rows.append(
+            {
+                "scaffold": scaffold,
+                "n": n,
+                "mean_S": float(np.mean(inverse(S_panel[members], transform))),
+                "mean_teacher": float(inverse(mean_teacher, transform)) if np.isfinite(mean_teacher) else np.nan,
+                "top_features": " · ".join(labels[f] for f in top),
+            }
+        )
+    return pd.DataFrame(rows, columns=["scaffold", "n", "mean_S", "mean_teacher", "top_features"])
 
 
 def _fidelity_figure(col, out):
