@@ -80,6 +80,18 @@ def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
     return H.table(headers, rows, numeric=(2, 4, 5, 6))
 
 
+def _substructure_rows(table, bit_dictionary):
+    """Rows of a global table whose bit is named by an environment of radius ≥ 1."""
+    if bit_dictionary is None:
+        return None
+
+    def radius(feature):
+        frags = bit_dictionary.get(str(feature).split("-")[1], {}).get("fragments", [])
+        return frags[0]["radius"] if frags else 0
+
+    return table[[radius(f) >= 1 for f in table["feature"]]].reset_index(drop=True)
+
+
 def write_report(model_dir, output, open_browser=False):
     started = time.time()
     color = STEP_COLORS["report"]
@@ -147,6 +159,14 @@ def write_report(model_dir, output, open_browser=False):
             '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
             + _top_table(top_s, featurizer, bit_dictionary, smarts)
         )
+        substructures = _substructure_rows(top_s, bit_dictionary) if featurizer == "morgan" else None
+        if substructures is not None and len(substructures):
+            content.append(
+                '<h3 style="margin-top:18px; font-size:13px">Top substructures</h3>'
+                '<p class="faint" style="font-size:11.5px;margin:0 0 6px">Bits whose named environment spans at '
+                "least one bond. Single-atom bits (above) mostly track molecular size and composition.</p>"
+                + _top_table(substructures, featurizer, bit_dictionary, smarts)
+            )
         body.append(
             H.section(
                 f"{col['name']} · what the teacher has learned",

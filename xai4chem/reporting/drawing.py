@@ -1,9 +1,11 @@
 """Molecule drawings: attributions mapped onto atoms, rendered with RDKit (SVG for pages, PNG for files)."""
 
 import numpy as np
-from rdkit import Chem
+from rdkit import Chem, RDLogger
 from rdkit.Chem import AllChem, Draw, rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
+
+RDLogger.DisableLog("rdApp.*")
 
 # Ersilia article palette: crimson raises the prediction, cobalt lowers it
 POS = (0.902, 0.224, 0.275)
@@ -118,6 +120,8 @@ def atom_png(mol, panels, output_path, vmax):
 
 def fragment_svg(smiles_or_smarts, size=150, smarts=False):
     """A small drawing of a substructure; empty for single atoms, whose label already says it all."""
+    if not smarts and ";" in smiles_or_smarts:
+        return ""  # a single-atom label such as [cH;D2;R], not a SMILES
     mol = Chem.MolFromSmarts(smiles_or_smarts) if smarts else Chem.MolFromSmiles(smiles_or_smarts, sanitize=False)
     if mol is None or mol.GetNumAtoms() < 2:
         return ""
