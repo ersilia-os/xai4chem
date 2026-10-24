@@ -43,8 +43,9 @@ xai4chem predict -m models/my_model -S "CC(=O)Nc1ccc(O)cc1" -o paracetamol.csv  
 
 What `setup` reuses and computes:
 
-- **Morgan counts** come precomputed from Olinda's `erl0_qmfp_r3.h5`. A copy in `~/.olinda` is reused;
-  otherwise the file is downloaded (2.9 GB).
+- **Morgan counts** come precomputed from Olinda's `erl0_qmfp_r3.h5`. The copy that `olinda setup`
+  puts in `~/.olinda` is reused; otherwise xai4chem tries to download it (2.9 GB). With your own
+  molecules instead, use `xai4chem setup --library my_smiles.csv -f all`.
 - **AccFG and datamol features** are computed locally, once (about 6 and 13 minutes on 8 cores).
 
 With an Ersilia Model Hub model as the teacher, `ersilia serve <model-id>` and then

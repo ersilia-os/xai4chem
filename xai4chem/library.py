@@ -97,7 +97,14 @@ def locate_ersilia_library(download=True):
         raise FileNotFoundError(f"{ERSILIA_LIBRARY_FILENAME} not found in {OLINDA_HOME} or {home_dir()}")
     dest = home_dir() / ERSILIA_LIBRARY_FILENAME
     echo(f"downloading the Ersilia reference library (2.9 GB) → [dim]{cpath(dest)}[/]", "run")
-    _download(ERSILIA_LIBRARY_URL, dest)
+    try:
+        _download(ERSILIA_LIBRARY_URL, dest)
+    except OSError as exc:  # urllib's HTTPError and URLError are OSErrors
+        raise FileNotFoundError(
+            f"Could not download {ERSILIA_LIBRARY_URL} ({exc}). Get the library with `olinda setup` (it is then "
+            f"reused from {OLINDA_HOME}), copy {ERSILIA_LIBRARY_FILENAME} into {home_dir()}, or build a library from "
+            "your own SMILES with `xai4chem setup --library my_smiles.csv`."
+        ) from exc
     success(f"downloaded → [dim]{cpath(dest)}[/]")
     return dest
 
