@@ -286,3 +286,37 @@ def test_continuous_hard_labels(library, tmp_path):
     assert col.hard is not None and col.hard.task == "continuous"
     r = model.explain(QUERIES, columns=["noisy"])["noisy"]
     np.testing.assert_allclose(r["phi_P"].sum(1) + r["base_P"], r["P"], atol=1e-4)
+
+
+def test_soft_labels_outside_the_library(library, tmp_path):
+    """Soft labels on molecules the library does not have: featurized on the fly, hard head still fitted."""
+    from .conftest import experiments, teacher
+
+    root, lib = library
+    known = set(pd.read_csv(root / "library_input.csv").smiles)
+    novel = []
+    for s in pd.read_csv(root / "soft.csv").smiles.tolist()[:600]:
+        mol = Chem.MolFromSmiles(s + "C")
+        if mol is not None and Chem.MolToSmiles(mol) not in known:
+            novel.append(Chem.MolToSmiles(mol))
+    novel = list(dict.fromkeys(novel))
+    pd.DataFrame({"smiles": novel, "activity": teacher(novel)}).to_csv(tmp_path / "soft_novel.csv", index=False)
+    pd.DataFrame({"smiles": novel[:150], "activity": experiments(novel[:150])}).to_csv(
+        tmp_path / "hard_novel.csv", index=False
+    )
+    run(
+        [
+            "fit",
+            "-s",
+            tmp_path / "soft_novel.csv",
+            "-h",
+            tmp_path / "hard_novel.csv",
+            "--library-dir",
+            lib,
+            "-m",
+            tmp_path / "m",
+            "--n-estimators",
+            200,
+        ]
+    )
+    assert XAIModel(tmp_path / "m").column("activity").hard is not None

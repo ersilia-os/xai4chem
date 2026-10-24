@@ -402,6 +402,12 @@ def learn_soft(
     with h5py.File(model_dir / TARGETS_NAME, "w") as f:
         f.create_dataset("rows", data=rows)
         f.create_dataset("Z", data=Z)
+        # Molecules outside the library have no library row; keep their SMILES so learn-hard can featurize them
+        extra = np.where(rows < 0)[0]
+        f.create_dataset("extra_pos", data=extra)
+        f.create_dataset(
+            "extra_smiles", data=np.array([smiles[i] for i in extra], dtype=object), dtype=h5py.string_dtype()
+        )
         f.attrs["soft_labels"] = str(soft_labels)
 
     if featurizer_name == "morgan" and (library.dir / LIB_BIT_DICTIONARY_NAME).exists():

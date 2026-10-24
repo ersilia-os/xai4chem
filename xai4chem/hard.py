@@ -50,7 +50,7 @@ from xai4chem.run import (
     write_json,
 )
 from xai4chem.similarity import binarize, fingerprints, nearest
-from xai4chem.soft import contributions, dmatrix, n_threads, predict_margin
+from xai4chem.soft import contributions, dmatrix, load_features, n_threads, predict_margin
 
 # Same constants as Olinda (olinda/tanimoto.py): absolute Tanimoto knees, a ceiling that always keeps a
 # third of the surrogate, and a dead zone below which the hard head is not mixed in at all.
@@ -167,6 +167,14 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
     with h5py.File(f"{model_dir}/{TARGETS_NAME}", "r") as f:
         target_rows = f["rows"][:]
         Z = f["Z"][:]
+        extra = {}
+        if "extra_pos" in f:
+            extra = dict(
+                zip(
+                    f["extra_pos"][:].tolist(),
+                    [s.decode() if isinstance(s, bytes) else s for s in f["extra_smiles"][:]],
+                )
+            )
     col_index = {c["id"]: j for j, c in enumerate(manifest["columns"])}
 
     panel = library.panel()
@@ -206,19 +214,18 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             booster, cv = train_hard_model(Xh, y, task, featurizer.sparse, seed)
             table.update(hard_name, CV=_cv_text(cv))
 
-            # Carry H onto S's scale over library rows that have a soft label, half to fit, half to judge
+            # Carry H onto S's scale over soft-labelled molecules, half to fit the map, half to judge it
             z = Z[:, col_index[col["id"]]]
-            ok = np.where((target_rows >= 0) & np.isfinite(z))[0]
+            ok = np.where(np.isfinite(z) & ((target_rows >= 0) | np.isin(np.arange(len(z)), list(extra))))[0]
             if len(ok) < 20:
                 raise ValueError(
-                    f"[{hard_name}] only {len(ok)} soft-labelled library rows: the isotonic map needs the teacher's "
-                    "scores over the reference library."
+                    f"[{hard_name}] only {len(ok)} soft-labelled molecules: the isotonic map needs the teacher's "
+                    "scores (re-run learn-soft with this version of xai4chem if the model predates it)."
                 )
             ok = np.random.default_rng(seed).permutation(ok)[:ISOTONIC_ROWS]
-            if featurizer.sparse:
-                L = library.csr(featurizer.name, target_rows[ok], verb="scoring H over the library")
-            else:
-                L = library.matrix(featurizer.name, target_rows[ok]).astype(np.float32)
+            sub_rows = target_rows[ok]
+            sub_smiles = [library.smiles[r] if r >= 0 else extra[i] for i, r in zip(ok, sub_rows)]
+            L = load_features(sub_smiles, sub_rows, library, featurizer)
             h_lib = predict_margin(booster, L, featurizer.sparse)
             half = len(ok) // 2
             from sklearn.isotonic import IsotonicRegression
