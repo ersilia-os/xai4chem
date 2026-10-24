@@ -82,6 +82,25 @@ def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
     return H.table(headers, rows, numeric=(2, 4, 5, 6) if counts else (2,))
 
 
+def _training_details(model_dir, col):
+    """A collapsed block with what S was trained on and how: rows, trees, scale, boosting parameters."""
+    meta = read_json(column_dir(model_dir, col["id"]) / "soft_meta.json")
+    rows = [
+        ["Scale", H.esc(meta["transform"])],
+        ["Training rows", f"{meta['n_train']:,}"],
+        ["Held-out rows", f"{meta['n_val']:,}"],
+        ["Trees", f"{meta['n_trees']:,}"],
+        [
+            "Fidelity on the teacher's scale",
+            f"R² {_f(meta['fidelity_teacher_scale']['r2'])} · RMSE {_f(meta['fidelity_teacher_scale']['rmse'])}",
+        ],
+    ]
+    rows += [[H.esc(k), H.esc(v)] for k, v in meta["params"].items()]
+    return (
+        '<details style="margin-top:14px"><summary>Training details</summary>' + H.table(["", ""], rows) + "</details>"
+    )
+
+
 def _substructure_rows(table, bit_dictionary):
     """Rows of a global table whose bit is named by an environment of radius ≥ 1."""
     if bit_dictionary is None:
@@ -161,6 +180,7 @@ def write_report(model_dir, output, open_browser=False):
             '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
             + _top_table(top_s, featurizer, bit_dictionary, smarts)
         )
+        content.append(_training_details(model_dir, col))
         substructures = _substructure_rows(top_s, bit_dictionary) if featurizer == "morgan" else None
         if substructures is not None and len(substructures):
             content.append(

@@ -67,7 +67,7 @@ figcaption { font-size:11.5px; color:var(--muted); margin-top:6px; }
 .molcard { margin-top:18px; }
 .molcard .head { display:flex; flex-wrap:wrap; gap:8px 18px; align-items:baseline; }
 .molcard .smi { font-family:var(--mono); font-size:11.5px; color:var(--muted); word-break:break-all; }
-.views { display:grid; grid-template-columns:repeat(auto-fill,minmax(190px,250px)); gap:10px; margin-top:10px; }
+.views { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,205px)); gap:10px; margin-top:10px; }
 .views figure { margin:0; text-align:center; }
 .views svg { width:100%; height:auto; }
 .split { display:grid; grid-template-columns:repeat(auto-fit,minmax(280px,1fr)); gap:18px; margin-top:10px; }
@@ -75,6 +75,9 @@ figcaption { font-size:11.5px; color:var(--muted); margin-top:6px; }
 .legend span::before { content:""; display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; background:var(--c); }
 .filter { width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:var(--radius-sm); background:var(--surface); font:inherit; }
 details > summary { cursor:pointer; color:var(--brand); font-weight:450; }
+table.sortable th { cursor:pointer; user-select:none; }
+table.sortable th[aria-sort="ascending"]::after { content:" ↑"; color:var(--brand); }
+table.sortable th[aria-sort="descending"]::after { content:" ↓"; color:var(--brand); }
 """
 
 
@@ -123,8 +126,11 @@ def badge(text, kind=None, hue=None):
     return f'<span class="{cls}"{style}>{esc(text)}</span>'
 
 
-def table(headers, rows, numeric=(), table_id=None):
-    """``rows`` are lists of already-escaped HTML cells; ``numeric`` are column indices to right-align."""
+def table(headers, rows, numeric=(), table_id=None, sortable=False):
+    """``rows`` are lists of already-escaped HTML cells; ``numeric`` are column indices to right-align.
+
+    ``sortable`` makes every header clickable (numbers sort numerically, "—" last); see ``SORT_SCRIPT``.
+    """
     numeric = set(numeric)
     head = "".join(
         f'<th class="num">{esc(h)}</th>' if i in numeric else f"<th>{esc(h)}</th>" for i, h in enumerate(headers)
@@ -136,7 +142,8 @@ def table(headers, rows, numeric=(), table_id=None):
         for r in rows
     )
     tid = f' id="{table_id}"' if table_id else ""
-    return f'<div class="scrollwrap" style="max-height:520px"><table class="data"{tid}><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
+    cls = "data sortable" if sortable else "data"
+    return f'<div class="scrollwrap" style="max-height:520px"><table class="{cls}"{tid}><thead><tr>{head}</tr></thead><tbody>{body}</tbody></table></div>'
 
 
 def contributions(items, scale=None):
@@ -194,6 +201,31 @@ document.querySelectorAll('input.filter').forEach(function (box) {
     var q = box.value.toLowerCase();
     document.querySelectorAll(box.dataset.target).forEach(function (el) {
       el.style.display = el.textContent.toLowerCase().indexOf(q) >= 0 ? '' : 'none';
+    });
+  });
+});
+</script>"""
+
+SORT_SCRIPT = """<script>
+document.querySelectorAll('table.sortable').forEach(function (table) {
+  table.querySelectorAll('th').forEach(function (th, col) {
+    th.addEventListener('click', function () {
+      var desc = th.getAttribute('aria-sort') !== 'descending';
+      table.querySelectorAll('th').forEach(function (h) { h.removeAttribute('aria-sort'); });
+      th.setAttribute('aria-sort', desc ? 'descending' : 'ascending');
+      var body = table.tBodies[0];
+      var rows = Array.prototype.slice.call(body.rows);
+      function key(r) {
+        var t = r.cells[col].textContent.trim();
+        var x = parseFloat(t);
+        return isNaN(x) ? t.toLowerCase() : x;
+      }
+      rows.sort(function (a, b) {
+        var x = key(a), y = key(b);
+        if (typeof x !== typeof y) { return typeof x === 'number' ? -1 : 1; }
+        return (x < y ? -1 : x > y ? 1 : 0) * (desc ? -1 : 1);
+      });
+      rows.forEach(function (r) { body.appendChild(r); });
     });
   });
 });

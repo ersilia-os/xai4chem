@@ -305,7 +305,7 @@ def _overview(cols, pred, n_cards):
                 cells.append("—" if pd.isna(g) else f"{g:+.2f}")
         rows.append(cells)
     numeric = tuple(range(1, len(headers)))
-    return H.table(headers, rows, numeric=numeric, table_id="overview")
+    return H.table(headers, rows, numeric=numeric, table_id="overview", sortable=True)
 
 
 def _write_gallery(model, cols, cards, n_total, path, pred):
@@ -324,7 +324,7 @@ def _write_gallery(model, cols, cards, n_total, path, pred):
         "Molecule <em>explanations</em>",
         lede,
         body,
-        script=H.FILTER_SCRIPT,
+        script=H.FILTER_SCRIPT + H.SORT_SCRIPT,
     )
     path.write_text(page)
 
