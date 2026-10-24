@@ -25,8 +25,16 @@ from xai4chem.cli import options
 )
 @options.library_dir()
 @click.option("--n-jobs", "-j", default=None, type=int, help="Worker processes (default: CPUs − 1, at most 8).")
-@click.option("--panel-size", default=50000, show_default=True, type=int, help="Library molecules used for global explanations.")
-@click.option("--bit-dictionary-mols", default=100000, show_default=True, type=int, help="Library molecules scanned to name Morgan bits.")
+@click.option(
+    "--panel-size", default=50000, show_default=True, type=int, help="Library molecules used for global explanations."
+)
+@click.option(
+    "--bit-dictionary-mols",
+    default=100000,
+    show_default=True,
+    type=int,
+    help="Library molecules scanned to name Morgan bits.",
+)
 @click.option("--force", is_flag=True, help="Recompute everything, even what is already there.")
 @options.friendly_errors
 def setup_cmd(source, featurizers, library_dir, n_jobs, panel_size, bit_dictionary_mols, force):

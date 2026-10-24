@@ -1,117 +1,97 @@
-# XAI4Chem
+# Explainable surrogates of chemistry models
 
-Explainable AI for chemistry: explain *what a model has learned* by distilling it into an interpretable
-surrogate, then attributing the surrogate's predictions to substructures, functional groups or
-descriptors.
+xai4chem explains *what a model has learned*. Score Ersilia's reference library (1.36M molecules) with any
+**teacher** model, for example an [Ersilia Model Hub](https://github.com/ersilia-os/ersilia) model or a
+ZairaChem model. xai4chem then distills it into a fast XGBoost **surrogate** and attributes every
+prediction to atoms, substructures, functional groups or descriptors.
 
-XAI4Chem follows the logic of [Olinda](https://github.com/ersilia-os/olinda):
+It follows the logic of [Olinda](https://github.com/ersilia-os/olinda), and the same soft-label files work
+for both tools:
 
-1. **Soft labels.** Score a reference library of molecules with any *teacher* model, for example an
-   Ersilia Model Hub model or a ZairaChem model.
-2. **S, the surrogate.** XGBoost learns to reproduce the teacher on the chosen featurizer. Teacher
-   probabilities are learned in logit space.
-3. **H, from hard labels (optional).** A model trained on experimental measurements with the same
-   featurizer. It is calibrated onto S's scale by an isotonic map (**H_S**) and mixed in only near the
-   labelled chemistry: `P = (1 − a)·S + a·H_S`, where `a = a_max · ramp(T)` and T is the 1-NN Tanimoto
-   to the labelled set.
+1. **S** learns the teacher's outputs (soft labels) over the library.
+2. **H**, optional, learns your own measurements (hard labels) with the same features.
+3. **H_S** is H carried onto S's scale by an isotonic map.
+4. The two are blended only near the labelled chemistry: `P = (1 − a)·S + a·H_S`, where
+   `a = a_max · ramp(T)` and T is the Tanimoto similarity to the nearest labelled molecule.
 
-For a single molecule `a` is fixed, so the explanations combine exactly. Each molecule gets three views:
+For a given molecule `a` is fixed, so the explanations merge exactly: `φ_P = (1 − a)·φ_S + a·φ_HS`. Every
+molecule gets four views:
 
-- **teacher (S)**
-- **experiments (H_S)**
-- **combined (P)**
-
-There is also a map of where the experiments disagree with the teacher.
-
-Explanations describe S. They are only as faithful as S is to the teacher, so every report shows that
-fidelity.
+- **teacher**
+- **experiments**
+- **combined**
+- **disagreement**: where the experiments disagree with the teacher
 
 ## Installation
 
 ```bash
 conda create -n xai4chem -c conda-forge python=3.10 -y
 conda activate xai4chem
-python -m pip install git+https://github.com/ersilia-os/xai4chem.git
+pip install git+https://github.com/ersilia-os/xai4chem.git
 ```
 
-## Usage
-
-### 1. Prepare the reference library (once)
-
-Featurizing a large library is the expensive, model-independent step. `setup` stores row-aligned
-feature matrices, a panel of molecules for global explanations and (for Morgan) a bit dictionary under
-`~/.xai4chem/library/`. Set `XAI4CHEM_HOME` or pass `--library-dir` to change the location.
+## Quick start
 
 ```bash
-xai4chem setup --library-file reference_library.csv --featurizer morgan accfg datamol --n-jobs 8
+xai4chem setup -f morgan -f accfg                # once: library features, panel, Morgan bit names
+xai4chem library -o erl0_smiles.csv              # score this file with your teacher → soft.csv
+xai4chem fit -s soft.csv -m models/my_model      # S → explanations → HTML report
+xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
+xai4chem explain -m models/my_model -i molecules.csv -o explanations/ --open
 ```
 
-### 2. Get soft labels
+What `setup` reuses and computes:
 
-Score the library with your teacher and save a CSV with a `smiles` column plus one column per teacher
-output. This is the same format Olinda uses.
+- **Morgan counts** come precomputed from Olinda's `erl0_qmfp_r3.h5`. A copy in `~/.olinda` is reused;
+  otherwise the file is downloaded (2.9 GB).
+- **AccFG and datamol features** are computed locally, once (about 6 and 13 minutes on 8 cores).
 
-```bash
-xai4chem library -o reference_library_smiles.csv
-# ...run the teacher on it → soft_labels.csv
-```
+The input files:
 
-### 3. Fit
+- **Soft labels:** a `smiles` (or `input`) column plus one numeric column per teacher output.
+- **Hard labels:** columns named like the teacher's outputs. 0/1 labels give a classifier, anything else
+  a regressor.
 
-```bash
-xai4chem fit --soft-labels soft_labels.csv --featurizer morgan --model-dir models/my_model
-xai4chem fit --soft-labels soft_labels.csv --hard-labels hard_labels.csv --featurizer accfg --model-dir models/my_model
-```
+## Commands
 
-- `fit` runs `learn-soft`, then `learn-hard` (when hard labels are given), then `explain-global`.
-- Each stage is also a command of its own.
-- Hard-label columns must be named like the soft-label columns: 0/1 labels give a classifier, anything
-  else a regressor.
-- Add `--stability` to retrain S with a second seed and report how stable the global importances are.
+| Command | What it does |
+|---|---|
+| `setup` | Prepare the reference library: feature matrices, explanation panel, Morgan bit dictionary |
+| `library` | Write the library SMILES for the teacher to score |
+| `fit` | Run learn-soft → [learn-hard] → explain-global → report |
+| `explain` | Explain molecules: predictions, attributions, an HTML gallery (and PNGs with `--png`) |
+| `predict` | Score molecules fast, without explanations |
+| `report` | Write the self-contained HTML model report |
+| `info` | Show a model card in the terminal |
+| `learn-soft` | Learn S from soft labels |
+| `learn-hard` | Learn H from hard labels, calibrate it onto S, set up the gate |
+| `explain-global` | Global importances and figures over the library panel |
+| `validate` | Score a model on held-out soft and/or hard labels |
 
-### 4. Explain, report, validate
-
-```bash
-xai4chem explain  --model-dir models/my_model -i my_molecules.csv -o explanations/ --id-col name
-xai4chem report   --model-dir models/my_model -o report/
-xai4chem validate --model-dir models/my_model --soft-labels heldout_soft.csv --hard-labels heldout_hard.csv
-```
-
-`explain` writes:
-
-- `predictions.csv`: P on the teacher's scale, plus S, H_S, T, a, the nearest labelled analogue and an
-  S-vs-H_S agreement score.
-- `attributions.csv`: feature-level attributions φ_S, φ_HS and φ_P.
-- Per molecule:
-  - a waterfall plot
-  - atom highlights (teacher, experiments, combined, disagreement)
-  - drawings of the top features
+Run `xai4chem <command> --help` for every option.
 
 ## Featurizers
 
-| Featurizer | Features | Atom view | Labels |
-|---|---|---|---|
-| `morgan` | Morgan counts, radius 3, 2048 bits | yes (occurrence centres) | named by the bit dictionary, e.g. `bit 1683: Cl (78%)`; the percentage shows how often the bit's top substructure is the one that set it, so collisions are visible |
-| `accfg` | AccFG functional-group and heterocycle counts | yes (group atoms) | group names |
-| `datamol` | datamol physicochemical descriptors | no | descriptor names |
+| `-f` | Features | Explanations |
+|---|---|---|
+| `morgan` | Morgan counts, radius 3, 2048 bits, clipped at 15 (identical to Olinda's) | atoms; bits named by their most common substructure in the library, with the collision rate |
+| `accfg` | AccFG functional-group and heterocycle counts | atoms; functional groups by name |
+| `datamol` | datamol physicochemical descriptors | descriptors (no atom view) |
 
-## Python API
+## Python
 
 ```python
 from xai4chem import XAIModel
 
 model = XAIModel("models/my_model")
-model.predict(["CCO", "c1ccccc1"])
-res = model.explain(["CCO"])["activity"]   # S, phi_S, P, phi_P, and with a hard head HS, phi_HS, T, a...
+model.predict(["CCO", "c1ccccc1O"])                 # P on the teacher's scale
+res = model.explain(["c1ccccc1O"])["my_column"]     # S, φ_S, P, φ_P (+ H_S, φ_HS, T, a)
 ```
 
-## Model directory
+How it works, the outputs, and what to precompute are described in [docs/](docs/).
 
-```
-models/my_model/
-  manifest.json  targets.h5  golden.json  bit_dictionary.json
-  columns/c0/s.json  soft_meta.json  explain/  _hard/{h.json, h_to_s.json, labelled.csv, hard_meta.json}
-```
+## About the Ersilia Open Source Initiative
 
-`golden.json` stores expected outputs for a few molecules. They are re-checked every time the model
-loads, so a mismatched environment fails loudly.
+The [Ersilia Open Source Initiative](https://ersilia.io) is a tech-nonprofit organization fueling sustainable research in the Global South. Ersilia's main asset is the [Ersilia Model Hub](https://github.com/ersilia-os/ersilia), an open-source repository of AI/ML models for antimicrobial drug discovery.
+
+![Ersilia Logo](assets/Ersilia_Brand.png)

@@ -67,6 +67,13 @@ PARAMS = {
 }
 
 
+def n_threads(n_rows):
+    """Threads for XGBoost: all cores for big data, few for small data, where thread overhead dominates."""
+    import os
+
+    return int(max(1, min(os.cpu_count() or 1, n_rows // 20000 + 1)))
+
+
 def min_child_weight(n_rows):
     """Olinda uses 200 at ~1.3M rows; scale it down so small datasets can still grow trees."""
     return float(max(1.0, min(200.0, n_rows / 6500)))
@@ -138,7 +145,13 @@ def train_booster(X, y, sparse, seed, n_estimators=2000, val_frac=VAL_FRAC, para
     Xm = to_model_input(X, sparse)
     dtrain = xgb.QuantileDMatrix(Xm[trn], label=y[trn], max_bin=PARAMS["max_bin"])
     dval = xgb.QuantileDMatrix(Xm[val], label=y[val], ref=dtrain, max_bin=PARAMS["max_bin"])
-    full = {**PARAMS, "min_child_weight": min_child_weight(len(trn)), "seed": seed, **(params or {})}
+    full = {
+        **PARAMS,
+        "min_child_weight": min_child_weight(len(trn)),
+        "nthread": n_threads(len(trn)),
+        "seed": seed,
+        **(params or {}),
+    }
     callbacks = [_progress_callback(progress, n_estimators)] if progress is not None else []
     booster = xgb.train(
         full,
@@ -299,7 +312,14 @@ def learn_soft(
             table.update(name, Scale=t, Rows=f"{int(mask.sum()):,}")
             with live_status() as update:
                 booster, _, val = train_booster(
-                    Xm, z, featurizer.sparse, seed, n_estimators=n_estimators, val_frac=val_frac, params=params, progress=update
+                    Xm,
+                    z,
+                    featurizer.sparse,
+                    seed,
+                    n_estimators=n_estimators,
+                    val_frac=val_frac,
+                    params=params,
+                    progress=update,
                 )
             pred = predict_margin(booster, Xm[val], featurizer.sparse)
             fid = fidelity(z[val], pred)
@@ -312,12 +332,18 @@ def learn_soft(
                 "fidelity": fid,
                 "fidelity_teacher_scale": fidelity(inverse(z[val], t), inverse(pred, t)),
                 "seed": seed,
-                "params": {**PARAMS, "min_child_weight": min_child_weight(int(mask.sum() - len(val))), **(params or {})},
+                "params": {
+                    **PARAMS,
+                    "min_child_weight": min_child_weight(int(mask.sum() - len(val))),
+                    **(params or {}),
+                },
             }
             if stability:
                 table.update(name, Time="stability…")
                 with live_status() as update:
-                    meta["stability_spearman"] = _stability(Xm, z, featurizer.sparse, booster, seed, n_estimators, val_frac, params, update)
+                    meta["stability_spearman"] = _stability(
+                        Xm, z, featurizer.sparse, booster, seed, n_estimators, val_frac, params, update
+                    )
             cdir = column_dir(model_dir, col_id)
             cdir.mkdir(parents=True, exist_ok=True)
             booster.save_model(str(cdir / S_NAME))
@@ -374,7 +400,9 @@ def learn_soft(
 
 def _stability(X, z, sparse, booster, seed, n_estimators, val_frac, params, update):
     """Spearman of global importances (mean |SHAP|) between two seeds and splits."""
-    other, _, _ = train_booster(X, z, sparse, seed + 1, n_estimators=n_estimators, val_frac=val_frac, params=params, progress=update)
+    other, _, _ = train_booster(
+        X, z, sparse, seed + 1, n_estimators=n_estimators, val_frac=val_frac, params=params, progress=update
+    )
     idx = np.sort(np.random.default_rng(seed).choice(len(z), size=min(STABILITY_ROWS, len(z)), replace=False))
     a = np.abs(contributions(booster, X[idx], sparse)[:, :-1]).mean(0)
     b = np.abs(contributions(other, X[idx], sparse)[:, :-1]).mean(0)

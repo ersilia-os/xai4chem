@@ -18,8 +18,30 @@ SCAFFOLDS = [
     "c1csc({})n1",
 ]
 R_GROUPS = [
-    "C", "CC", "CCC", "CO", "CN", "C(=O)O", "C(=O)N", "Cl", "F", "Br", "O", "N", "OC", "C#N",
-    "[N+](=O)[O-]", "S(=O)(=O)N", "C(F)(F)F", "CCO", "CCN", "c1ccccc1", "C1CC1", "NC(=O)C", "OCC", "CCCl",
+    "C",
+    "CC",
+    "CCC",
+    "CO",
+    "CN",
+    "C(=O)O",
+    "C(=O)N",
+    "Cl",
+    "F",
+    "Br",
+    "O",
+    "N",
+    "OC",
+    "C#N",
+    "[N+](=O)[O-]",
+    "S(=O)(=O)N",
+    "C(F)(F)F",
+    "CCO",
+    "CCN",
+    "c1ccccc1",
+    "C1CC1",
+    "NC(=O)C",
+    "OCC",
+    "CCCl",
 ]
 
 

@@ -277,7 +277,9 @@ def setup_library(
         manifest["schema"] = SCHEMA
         manifest["created"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         _write_manifest(library_dir, manifest)
-        success(f"library [bold]{manifest['name']}[/] · {manifest['n_molecules']:,} molecules → [dim]{cpath(library_dir)}[/]")
+        success(
+            f"library [bold]{manifest['name']}[/] · {manifest['n_molecules']:,} molecules → [dim]{cpath(library_dir)}[/]"
+        )
 
     library = ReferenceLibrary(library_dir)
     rng = np.random.default_rng(seed)
@@ -329,10 +331,12 @@ class BitDictionary(object):
 
     @classmethod
     def load(cls, path):
+        """Read a bit dictionary written by ``xai4chem setup``."""
         with open(path) as f:
             return cls(json.load(f))
 
     def fragments(self, bit):
+        """The most common substructures that set ``bit``, with their shares."""
         return self.bits[str(bit)]["fragments"]
 
     def collision(self, bit):
@@ -341,6 +345,7 @@ class BitDictionary(object):
         return 1.0 - frags[0]["share"] if frags else float("nan")
 
     def label(self, bit):
+        """A short name for ``bit``: its most common substructure and that substructure's share."""
         frags = self.fragments(bit)
         if not frags:
             return f"bit {bit}"
@@ -362,14 +367,17 @@ class ReferenceLibrary(object):
 
     @property
     def name(self):
+        """The library's name (``erl0`` for Ersilia's reference library)."""
         return self.manifest["name"]
 
     @property
     def featurizers(self):
+        """Names of the featurizers precomputed over the library."""
         return list(self.manifest["features"])
 
     @property
     def smiles(self):
+        """The library SMILES, in row order (loaded once, on first access)."""
         if self._smiles is None:
             src = self.manifest["smiles"]
             with h5py.File(src["file"], "r") as f:
@@ -379,6 +387,7 @@ class ReferenceLibrary(object):
 
     @property
     def index(self):
+        """SMILES → row, for aligning soft labels to the library."""
         if self._index is None:
             self._index = {s: i for i, s in enumerate(self.smiles)}
         return self._index
@@ -387,6 +396,7 @@ class ReferenceLibrary(object):
         return int(self.manifest["n_molecules"])
 
     def has(self, featurizer_name):
+        """Whether the library has precomputed features for ``featurizer_name``."""
         return featurizer_name in self.manifest["features"]
 
     def _source(self, name):
@@ -397,12 +407,14 @@ class ReferenceLibrary(object):
         return self.manifest["features"][name]
 
     def featurizer(self, name):
+        """The featurizer behind a library matrix (Morgan comes with its bit dictionary)."""
         featurizer = featurizer_from_config(self._source(name)["config"])
         if name == "morgan" and (self.dir / BIT_DICTIONARY_NAME).exists():
             featurizer.bit_dictionary = self.bit_dictionary()
         return featurizer
 
     def bit_dictionary(self):
+        """The Morgan bit dictionary computed at setup."""
         return BitDictionary.load(self.dir / BIT_DICTIONARY_NAME)
 
     def matrix(self, name, rows=None):
@@ -471,4 +483,5 @@ class ReferenceLibrary(object):
         return X[inverse]
 
     def panel(self):
+        """Row indices of the explanation panel."""
         return np.load(self.dir / PANEL_NAME)

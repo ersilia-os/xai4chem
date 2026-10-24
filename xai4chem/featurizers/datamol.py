@@ -31,6 +31,7 @@ class DatamolDescriptor(object):
         self.feature_names = list(columns) if columns is not None else None
 
     def fit(self, smiles):
+        """Learn any data-dependent state (see :mod:`xai4chem.featurizers`); returns ``self``."""
         df = datamol_featurizer(smiles)
         X = df.to_numpy(dtype=np.float32)
         keep = []
@@ -46,6 +47,7 @@ class DatamolDescriptor(object):
         return self
 
     def transform(self, smiles):
+        """Featurize ``smiles`` into a float32 matrix, one row per molecule."""
         if self.columns is None:
             raise ValueError("The datamol featurizer has not been fitted.")
         df = datamol_featurizer(smiles).reindex(columns=self.columns)
@@ -55,17 +57,22 @@ class DatamolDescriptor(object):
         return X
 
     def transform_raw(self, smiles):
+        """Featurize ``smiles`` in the storage dtype (uint8 counts, float32 descriptors)."""
         return self.transform(smiles)
 
     def labels(self):
+        """Human-readable feature names, aligned with ``feature_names``."""
         return list(self.columns)
 
     def atom_groups(self, mol):
+        """For each feature present in ``mol``, the atom-index tuples of its occurrences."""
         return None
 
     def to_config(self):
+        """A JSON-serialisable description, stored in model and library manifests."""
         return {"name": self.name, "columns": self.columns, "medians": self.medians}
 
     @classmethod
     def from_config(cls, cfg):
+        """Rebuild the featurizer from the dict written by ``to_config``."""
         return cls(columns=cfg["columns"], medians=cfg["medians"])

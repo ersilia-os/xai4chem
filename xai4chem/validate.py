@@ -17,7 +17,11 @@ def _hard_metrics(y, pred):
     from sklearn.metrics import average_precision_score, roc_auc_score
 
     if np.isin(y, [0, 1]).all() and len(np.unique(y)) == 2:
-        return {"auroc": float(roc_auc_score(y, pred)), "auprc": float(average_precision_score(y, pred)), "n": int(len(y))}
+        return {
+            "auroc": float(roc_auc_score(y, pred)),
+            "auprc": float(average_precision_score(y, pred)),
+            "n": int(len(y)),
+        }
     return {"spearman": float(spearmanr(y, pred).statistic), "n": int(len(y))}
 
 
@@ -32,7 +36,14 @@ def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
     rule("xai4chem · validate", style=color, right=cpath(model_dir))
     report = {}
     table = Table(box=box.SIMPLE_HEAD, header_style=f"bold {color}", pad_edge=False)
-    for name, justify in [("Column", "left"), ("Labels", "left"), ("n", "right"), ("Metric", "left"), ("S", "right"), ("P", "right")]:
+    for name, justify in [
+        ("Column", "left"),
+        ("Labels", "left"),
+        ("n", "right"),
+        ("Metric", "left"),
+        ("S", "right"),
+        ("P", "right"),
+    ]:
         table.add_column(name, justify=justify, no_wrap=True)
     for kind, path in (("soft", soft_labels), ("hard", hard_labels)):
         if path is None:
@@ -54,10 +65,18 @@ def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
             entry = report.setdefault(name, {})
             for out in ("S", "P"):
                 pred = res[name][out][m]
-                entry[f"{kind}_{out}"] = fidelity(forward(y[m], col.transform), pred) if kind == "soft" else _hard_metrics(y[m], pred)
-            keys = ["r2", "spearman"] if kind == "soft" else (["auroc", "auprc"] if "auroc" in entry[f"{kind}_S"] else ["spearman"])
+                entry[f"{kind}_{out}"] = (
+                    fidelity(forward(y[m], col.transform), pred) if kind == "soft" else _hard_metrics(y[m], pred)
+                )
+            keys = (
+                ["r2", "spearman"]
+                if kind == "soft"
+                else (["auroc", "auprc"] if "auroc" in entry[f"{kind}_S"] else ["spearman"])
+            )
             for k in keys:
-                table.add_row(name, kind, f"{int(m.sum()):,}", k, f"{entry[f'{kind}_S'][k]:.3f}", f"{entry[f'{kind}_P'][k]:.3f}")
+                table.add_row(
+                    name, kind, f"{int(m.sum()):,}", k, f"{entry[f'{kind}_S'][k]:.3f}", f"{entry[f'{kind}_P'][k]:.3f}"
+                )
     console.print(table)
     if output is not None:
         write_json(output, report)

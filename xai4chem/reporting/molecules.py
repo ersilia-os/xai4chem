@@ -50,7 +50,11 @@ def explain_molecules(model, smiles, output_dir, ids=None, columns=None, png=Fal
     ids = [str(i) for i in ids] if ids is not None else [f"mol_{i:04d}" for i in range(len(smiles))]
     cols = model._select(columns)
     if not quiet:
-        rule("xai4chem · explain", style=color, right=f"{len(smiles):,} molecules · {len(cols)} column(s) · {model.featurizer.name}")
+        rule(
+            "xai4chem · explain",
+            style=color,
+            right=f"{len(smiles):,} molecules · {len(cols)} column(s) · {model.featurizer.name}",
+        )
     labels = model.featurizer.labels()
     names = model.featurizer.feature_names
     mols = [Chem.MolFromSmiles(s) for s in smiles]
@@ -122,7 +126,14 @@ def _attribution_rows(cols, res, X, ids, mols, labels, names):
             phi = r["phi_P"][i]
             keep = set(np.nonzero(X[i])[0]) | set(np.argsort(-np.abs(phi))[:TOP_FEATURES])
             for f in sorted(keep, key=lambda f: -abs(phi[f])):
-                row = {"id": ids[i], "column": col.name, "feature": names[f], "label": labels[f], "value": float(X[i, f]), "phi_S": float(r["phi_S"][i, f])}
+                row = {
+                    "id": ids[i],
+                    "column": col.name,
+                    "feature": names[f],
+                    "label": labels[f],
+                    "value": float(X[i, f]),
+                    "phi_S": float(r["phi_S"][i, f]),
+                }
                 if col.hard is not None:
                     row["phi_HS"] = float(r["phi_HS"][i, f])
                     row["phi_P"] = float(phi[f])
@@ -145,23 +156,38 @@ def _views(model, col, r, i, mol):
 
 def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels):
     drawn = prepare(mol)
-    parts = [f'<div class="card molcard"><div class="head"><b>{H.esc(mol_id)}</b><span class="smi">{H.esc(smi)}</span></div>']
+    parts = [
+        f'<div class="card molcard"><div class="head"><b>{H.esc(mol_id)}</b><span class="smi">{H.esc(smi)}</span></div>'
+    ]
     for col in cols:
         r = res[col.name]
         hard = col.hard is not None
         stats = [H.stat("Prediction", f"{r['prob'][i]:.3f}", f"{col.name} · teacher scale")]
-        stats.append(H.stat("S", f"{r['S'][i]:+.2f}", "teacher surrogate", tip="S on its own scale (logit for probabilities)"))
+        stats.append(
+            H.stat("S", f"{r['S'][i]:+.2f}", "teacher surrogate", tip="S on its own scale (logit for probabilities)")
+        )
         if hard:
             stats.append(H.stat("H_S", f"{r['HS'][i]:+.2f}", "experiments, on S's scale"))
-            stats.append(H.stat("a", f"{r['a'][i]:.2f}", f"T = {r['T'][i]:.2f} to nearest labelled", tip="Blend weight of the hard head: a = a_max · ramp(T)"))
+            stats.append(
+                H.stat(
+                    "a",
+                    f"{r['a'][i]:.2f}",
+                    f"T = {r['T'][i]:.2f} to nearest labelled",
+                    tip="Blend weight of the hard head: a = a_max · ramp(T)",
+                )
+            )
         parts.append(f'<div class="eyebrow" style="margin-top:12px">{H.esc(col.name)}</div>{H.kpis(stats)}')
         views = _views(model, col, r, i, mol)
         if views is not None:
             panels, unmapped = views
             vmax = max(float(np.max(np.abs(v))) for _, v in panels) or 1.0
-            figs = "".join(f"<figure>{atom_svg(drawn, v, vmax)}<figcaption>{H.esc(t)}</figcaption></figure>" for t, v in panels)
+            figs = "".join(
+                f"<figure>{atom_svg(drawn, v, vmax)}<figcaption>{H.esc(t)}</figcaption></figure>" for t, v in panels
+            )
             parts.append(f'<div class="views">{figs}</div>')
-            parts.append('<div class="legend"><span style="--c:var(--crimson)">raises the prediction</span><span style="--c:var(--cobalt)">lowers it</span></div>')
+            parts.append(
+                '<div class="legend"><span style="--c:var(--crimson)">raises the prediction</span><span style="--c:var(--cobalt)">lowers it</span></div>'
+            )
         phi = r["phi_P"][i]
         top = np.argsort(-np.abs(phi))[:CARD_FEATURES]
         items = [(("" if x_row[f] > 0 else "absent · ") + labels[f], float(phi[f])) for f in top if phi[f] != 0]
@@ -217,12 +243,14 @@ def _terminal_table(cols, pred, long_rows):
     from rich.table import Table
 
     table = Table(box=box.SIMPLE_HEAD, header_style="bold blue", pad_edge=False)
-    table.add_column("Molecule", no_wrap=True, max_width=18)
+    table.add_column("Molecule", no_wrap=True, min_width=8, max_width=18, overflow="ellipsis")
     for col in cols:
-        table.add_column(col.name, justify="right", no_wrap=True)
+        table.add_column(
+            col.name, justify="right", no_wrap=True, min_width=max(6, min(len(col.name), 14)), overflow="ellipsis"
+        )
         if col.hard is not None:
-            table.add_column("a", justify="right", no_wrap=True)
-    table.add_column("Top contributions", overflow="ellipsis", no_wrap=True, max_width=70)
+            table.add_column("a", justify="right", no_wrap=True, min_width=4)
+    table.add_column("Top contributions", overflow="ellipsis", no_wrap=True, ratio=1)
     first = cols[0].name
     by_mol = {}
     for row in long_rows:

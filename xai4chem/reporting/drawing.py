@@ -117,8 +117,9 @@ def atom_png(mol, panels, output_path, vmax):
 
 
 def fragment_svg(smiles_or_smarts, size=150, smarts=False):
+    """A small drawing of a substructure; empty for single atoms, whose label already says it all."""
     mol = Chem.MolFromSmarts(smiles_or_smarts) if smarts else Chem.MolFromSmiles(smiles_or_smarts, sanitize=False)
-    if mol is None:
+    if mol is None or mol.GetNumAtoms() < 2:
         return ""
     try:
         mol.UpdatePropertyCache(strict=False)
@@ -126,7 +127,10 @@ def fragment_svg(smiles_or_smarts, size=150, smarts=False):
     except Exception:
         return ""
     drawer = rdMolDraw2D.MolDraw2DSVG(size, size)
-    drawer.drawOptions().clearBackground = False
+    opts = drawer.drawOptions()
+    opts.clearBackground = False
+    opts.maxFontSize = 14
+    opts.padding = 0.12
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()

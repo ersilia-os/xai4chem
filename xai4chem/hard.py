@@ -50,7 +50,7 @@ from xai4chem.run import (
     write_json,
 )
 from xai4chem.similarity import binarize, fingerprints, nearest
-from xai4chem.soft import contributions, dmatrix, predict_margin
+from xai4chem.soft import contributions, dmatrix, n_threads, predict_margin
 
 # Same constants as Olinda (olinda/tanimoto.py): absolute Tanimoto knees, a ceiling that always keeps a
 # third of the surrogate, and a dead zone below which the hard head is not mixed in at all.
@@ -107,7 +107,7 @@ def train_hard_model(X, y, task, sparse, seed):
     import xgboost as xgb
     from sklearn.metrics import roc_auc_score
 
-    params = {**PARAMS, **_objective(task), "seed": seed, "min_child_weight": 1.0}
+    params = {**PARAMS, **_objective(task), "seed": seed, "min_child_weight": 1.0, "nthread": n_threads(len(y))}
     fold = _folds(y, task, seed)
     oof = np.zeros(len(y))
     rounds = []
@@ -126,7 +126,10 @@ def train_hard_model(X, y, task, sparse, seed):
     if task == "binary":
         cv = {"auroc": float(roc_auc_score(y, oof))}
     else:
-        cv = {"spearman": float(spearmanr(y, oof).statistic), "r2": float(1 - ((y - oof) ** 2).sum() / ((y - y.mean()) ** 2).sum())}
+        cv = {
+            "spearman": float(spearmanr(y, oof).statistic),
+            "r2": float(1 - ((y - oof) ** 2).sum() / ((y - y.mean()) ** 2).sum()),
+        }
     cv["folds"] = CV_FOLDS
     n_rounds = int(np.mean(rounds))
     booster = xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=n_rounds)
@@ -210,7 +213,11 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             from sklearn.metrics import r2_score
 
             iso = IsotonicRegression(increasing="auto", out_of_bounds="clip").fit(h_lib[:half], z[ok[:half]])
-            iso_map = {"x": iso.X_thresholds_.tolist(), "y": iso.y_thresholds_.tolist(), "increasing": bool(iso.increasing_)}
+            iso_map = {
+                "x": iso.X_thresholds_.tolist(),
+                "y": iso.y_thresholds_.tolist(),
+                "increasing": bool(iso.increasing_),
+            }
             alignment_r2 = float(r2_score(z[ok[half:]], apply_isotonic(h_lib[half:], iso_map)))
             a_max = blend_ceiling(alignment_r2)
 

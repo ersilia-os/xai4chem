@@ -33,9 +33,7 @@ class _Matcher(object):
     def __init__(self):
         fgs_ref = ref_features()
         self.queries = [
-            (fgs_ref[name], Chem.MolFromSmarts(smarts))
-            for name, smarts in AccFG().dict_fgs.items()
-            if name in fgs_ref
+            (fgs_ref[name], Chem.MolFromSmarts(smarts)) for name, smarts in AccFG().dict_fgs.items() if name in fgs_ref
         ]
         self.n_features = len(fgs_ref)
 
@@ -81,32 +79,42 @@ class AccFgFingerprint(object):
         self.feature_names = ["fg-{0}".format(i) for i in range(len(ref_features()))]
 
     def fit(self, smiles=None):
+        """Learn any data-dependent state (see :mod:`xai4chem.featurizers`); returns ``self``."""
         return self
 
     def transform(self, smiles):
+        """Featurize ``smiles`` into a float32 matrix, one row per molecule."""
         return accfg_featurizer(smiles).astype(np.float32)
 
     def transform_raw(self, smiles):
+        """Featurize ``smiles`` in the storage dtype (uint8 counts, float32 descriptors)."""
         return accfg_featurizer(smiles)
 
     def labels(self):
+        """Human-readable feature names, aligned with ``feature_names``."""
         return list(ref_features().keys())
 
     def smarts(self):
+        """The SMARTS pattern of every functional group, aligned with ``feature_names``."""
         return list(ref_smarts().keys())
 
     def atom_groups(self, mol):
+        """For each feature present in ``mol``, the atom-index tuples of its occurrences."""
         return _matcher().match(mol)
 
     def get_ref_features(self):
+        """Functional-group name → feature index."""
         return ref_features()
 
     def get_ref_smarts(self):
+        """SMARTS pattern → feature index."""
         return ref_smarts()
 
     def to_config(self):
+        """A JSON-serialisable description, stored in model and library manifests."""
         return {"name": self.name, "n_features": len(self.feature_names)}
 
     @classmethod
     def from_config(cls, cfg):
+        """Rebuild the featurizer from the dict written by ``to_config``."""
         return cls()

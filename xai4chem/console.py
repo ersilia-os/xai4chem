@@ -199,14 +199,10 @@ def detail(rows, *, indent: int = 3) -> None:
     console.print(Padding(table, (1, 0, 0, indent)))
 
 
-def summary_panel(
-    title: str, rows, *, border_style: str | None = None, icon: str | None = None
-) -> None:
+def summary_panel(title: str, rows, *, border_style: str | None = None, icon: str | None = None) -> None:
     """Rounded, left-titled panel of key-value rows (run header / final summary)."""
     color = border_style or active_color()
-    table = Table(
-        show_header=False, box=None, pad_edge=False, expand=False, padding=(0, 1)
-    )
+    table = Table(show_header=False, box=None, pad_edge=False, expand=False, padding=(0, 1))
     table.add_column(justify="right", style=f"bold {color}", no_wrap=True)
     table.add_column(justify="left", overflow="fold")
     for key, value in rows:
@@ -277,9 +273,7 @@ def status_line(
         parts.append(f"{bar(frac, width)} [bold]{frac:>4.0%}[/]")
     for label, value in pairs:
         # An empty label is a bare value — a count that needs no naming next to the bar beside it.
-        parts.append(
-            f"[dim]{label}[/] [bold]{value}[/]" if label else f"[bold]{value}[/]"
-        )
+        parts.append(f"[dim]{label}[/] [bold]{value}[/]" if label else f"[bold]{value}[/]")
     line = "  [dim]·[/]  ".join(parts)
     return f"{line}  [dim]· {tail}[/]" if tail else line
 
@@ -349,11 +343,7 @@ def sweep_progress(verb: str, total: int, *, width: int = 24):
             frac = done / total
             took = time.time() - started
             rate = done / took if took > 0 else 0.0
-            eta = (
-                f" · eta {elapsed((total - done) / rate)}"
-                if rate > 0 and done < total
-                else ""
-            )
+            eta = f" · eta {elapsed((total - done) / rate)}" if rate > 0 and done < total else ""
             if console.is_terminal and not live_region_taken():
                 update(
                     status_line(
@@ -423,10 +413,7 @@ class LiveTable:
         self.item_label = item_label
         self.running_verb = running_verb
         self.color = color or active_color()
-        self._state = {
-            i: {"status": "queued", "started": None, "elapsed": None, "values": {}}
-            for i in self.items
-        }
+        self._state = {i: {"status": "queued", "started": None, "elapsed": None, "values": {}} for i in self.items}
         self._live = None
         self._note = ""  # the fallback line, shown under the table when the detail cannot fit beside
         self._detail: dict = {}
@@ -463,9 +450,7 @@ class LiveTable:
         )
         # Both widths are sized to their content rather than generously: the margin they free is what
         # the detail panel occupies, and a task name is identified by its tail as readily as its head.
-        table.add_column(
-            self.item_label, no_wrap=True, overflow="ellipsis", max_width=24
-        )
+        table.add_column(self.item_label, no_wrap=True, overflow="ellipsis", max_width=24)
         table.add_column("Status", no_wrap=True, width=13)
         for name in self.fields:
             table.add_column(name, justify="right", no_wrap=True)
@@ -514,9 +499,7 @@ class LiveTable:
         if panel is not None:
             grid = Table.grid(padding=(0, 3))
             grid.add_column()
-            grid.add_column(
-                vertical="bottom"
-            )  # beside the rows, not floating up by the title
+            grid.add_column(vertical="bottom")  # beside the rows, not floating up by the title
             grid.add_row(table, panel)
             # Measured against an unbounded width, not the console's. Rich clamps a measurement to the
             # space available, so asking it directly reports "fits" for every terminal — while the
@@ -527,10 +510,7 @@ class LiveTable:
             # Too narrow for both. Fold the same detail into one line rather than the caller's full
             # markup, which carries a progress bar and every pair and would wrap on exactly the narrow
             # terminal that sent us here — a wrapped status line reflows the display on every repaint.
-            folded = "  [dim]·[/]  ".join(
-                f"[dim]{label}[/] [bold]{value}[/]"
-                for label, value in self._detail.items()
-            )
+            folded = "  [dim]·[/]  ".join(f"[dim]{label}[/] [bold]{value}[/]" for label, value in self._detail.items())
             return Group(table, "", f"  {folded}")
         if not self._note:
             return table
@@ -566,9 +546,7 @@ class LiveTable:
         self._note = markup
         self._detail = dict(detail or {})
         if values:
-            running = next(
-                (i for i, s in self._state.items() if s["status"] == "running"), None
-            )
+            running = next((i for i, s in self._state.items() if s["status"] == "running"), None)
             if running is not None:
                 self._state[running]["values"].update(values)
         self._refresh()
@@ -594,9 +572,7 @@ class LiveTable:
             # Live is handed a proxy, not a rendered table: it re-renders on every auto-refresh tick, so
             # the spinner turns and the clock advances between updates. Handing it a built Table instead
             # would redraw the same frozen frame 8x/second — which is what a hung run looks like.
-            self._live = Live(
-                _Dynamic(self), console=console, transient=True, refresh_per_second=8
-            )
+            self._live = Live(_Dynamic(self), console=console, transient=True, refresh_per_second=8)
             self._live.__enter__()
             _live_owner = self
         return self
@@ -607,6 +583,4 @@ class LiveTable:
             self._live.__exit__(*exc)
             self._live = None
             _live_owner = None
-            console.print(
-                self._render()
-            )  # persist the finished table as the step's record
+            console.print(self._render())  # persist the finished table as the step's record

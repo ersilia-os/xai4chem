@@ -1,32 +1,33 @@
-from rdkit import Chem
-from importlib import resources
 import csv
 import os
+from importlib import resources
+
+from rdkit import Chem
 
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def canonical_smiles(smi):
     return Chem.MolToSmiles(Chem.MolFromSmiles(smi))
 
-class AccFG():
+class AccFG:
     def __init__(self, common_fgs=True, heterocycle_fgs=True, user_defined_fgs={}, print_load_info=False, lite=False):
         self.lite = lite
         log_text = ""
         if common_fgs and not lite:
             self.dict_fgs_common_path = resources.files("xai4chem").joinpath("tools/accfg/fgs_common.csv")
-            
+
             self.dict_fgs_common = self.csv_to_dict(self.dict_fgs_common_path)
             log_text += f"Loaded {len(self.dict_fgs_common)} common functional groups. "
         elif common_fgs and lite:
             self.dict_fgs_common_path = resources.files("xai4chem").joinpath("tools/accfg/fgs_common.csv")
-            
+
             self.dict_fgs_common = self.csv_to_dict(self.dict_fgs_common_path, lite=self.lite)
             log_text += f"Loaded {len(self.dict_fgs_common)} common functional groups (lite). "
         else:
             self.dict_fgs_common = {}
         if heterocycle_fgs:
             self.dict_fg_heterocycle_path =  resources.files("xai4chem").joinpath("tools/accfg/fgs_heterocycle.csv")
-            
+
             self.dict_fg_heterocycle = self.csv_to_dict(self.dict_fg_heterocycle_path)
             log_text += f"Loaded {len(self.dict_fg_heterocycle)} heterocycle groups. "
         else:
@@ -37,17 +38,17 @@ class AccFG():
         else:
             self.dict_fgs_user_defined = {}
         self.dict_fgs = {**self.dict_fgs_common, **self.dict_fg_heterocycle, **self.dict_fgs_user_defined}
-        
+
         if print_load_info:
             print(f'{log_text}Total {len(self.dict_fgs)} functional groups loaded.')
-        
+
     def _is_fg_in_mol(self, mol, fg):
         fgmol = Chem.MolFromSmarts(fg)
         # mol = Chem.MolFromSmiles(mol.strip())
         mapped_atoms = Chem.Mol.GetSubstructMatches(mol, fgmol, uniquify=True)
         if_mapped = len(mapped_atoms) > 0
         return if_mapped, mapped_atoms
-    
+
     def _freq_fg_in_mol(self, mol, fg):
         fgmol = Chem.MolFromSmarts(fg)
         # mol = Chem.MolFromSmiles(mol.strip())
@@ -74,7 +75,7 @@ class AccFG():
             idx1, idx2 = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
             bonds.append(mol.GetBondBetweenAtoms(atom_match[idx1], atom_match[idx2]).GetIdx())
         return bonds
-    
+
     def process_user_defined_fgs(self, user_defined_fgs):
         user_defined_fgs_edit = {}
         for fg_name, fg_smi in user_defined_fgs.items():
@@ -85,7 +86,7 @@ class AccFG():
                 fg_smi_edit = fg_smi_edit.replace('[nH]','[n]')
             user_defined_fgs_edit[fg_name] = fg_smi_edit
         return user_defined_fgs_edit
-    
+
     def run(self, smiles: str, show_atoms=True, show_graph=False, canonical=True) -> dict:
         """
         Input a molecule SMILES or name.
@@ -95,12 +96,12 @@ class AccFG():
             smiles = canonical_smiles(smiles)
         mol = Chem.MolFromSmiles(smiles)
         return self.run_mol(mol, show_atoms=show_atoms, show_graph=show_graph)
-        
+
     def run_mol(self, mol: object, show_atoms=True, show_graph=False, use_atom_map_num=False):
-        fgs_in_molec = {name : self._is_fg_in_mol(mol, fg)[1] for name, fg in self.dict_fgs.items() if self._is_fg_in_mol(mol, fg)[0]}
+        fgs_in_molec = {name: self._is_fg_in_mol(mol, fg)[1] for name, fg in self.dict_fgs.items() if self._is_fg_in_mol(mol, fg)[0]}
             # Check if the functional groups are subgroups of other functional groups
             # Build FG graph
-        
+
         if use_atom_map_num:
             atom_idx_map_num_dict = {}
             for atom in mol.GetAtoms():
@@ -113,7 +114,6 @@ class AccFG():
         else:
             return list(fgs_in_molec.keys())
 
-            
     def run_freq(self, smiles: str) -> str:
         """
         Input a molecule SMILES or name.
@@ -139,4 +139,3 @@ class AccFG():
                     key = key.replace('#','').lstrip()
                 data[key] = row.pop('SMARTS Pattern')
         return data
-    

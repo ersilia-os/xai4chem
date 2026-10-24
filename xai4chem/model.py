@@ -35,8 +35,8 @@ from xai4chem.run import (
     S_NAME,
     SOFT_META_NAME,
     column_dir,
-    has_hard_head,
     hard_dir,
+    has_hard_head,
     read_json,
     read_manifest,
     write_json,
@@ -62,6 +62,8 @@ def valid_mask(smiles):
 
 
 class HardHead(object):
+    """The hard head of one column: H, its isotonic map onto S, and the gate's labelled set."""
+
     def __init__(self, hdir):
         self.meta = read_json(hdir / HARD_META_NAME)
         self.h = _load_booster(hdir / H_NAME)
@@ -75,10 +77,13 @@ class HardHead(object):
         self.task = self.meta["task"]
 
     def gate(self, T):
+        """The blend weight ``a = a_max · ramp(T)`` for similarities ``T``."""
         return self.a_max * ramp(T, self.meta["t_lo"], self.meta["t_hi"])
 
 
 class Column(object):
+    """One teacher column: S, its training metadata, and the hard head if one was learned."""
+
     def __init__(self, model_dir, entry):
         self.id = entry["id"]
         self.name = entry["name"]
@@ -113,13 +118,16 @@ class XAIModel(object):
 
     @property
     def column_names(self):
+        """Names of the teacher columns the model was trained on."""
         return [c.name for c in self.columns]
 
     @property
     def sparse(self):
+        """Whether the model's features are sparse counts (zeros treated as missing)."""
         return self.featurizer.sparse
 
     def column(self, name):
+        """The :class:`Column` called ``name``."""
         for c in self.columns:
             if c.name == name:
                 return c
@@ -134,6 +142,7 @@ class XAIModel(object):
         return [c for c in self.columns if c.name in columns]
 
     def featurize(self, smiles):
+        """Raw features of ``smiles`` with the model's featurizer."""
         return self.featurizer.transform_raw(list(smiles))
 
     def _fingerprints(self, smiles, X):
@@ -220,7 +229,11 @@ class XAIModel(object):
             parts.append(self._margins_batch(smiles[start : start + batch_size], cols))
             if progress is not None:
                 progress(min(start + batch_size, len(smiles)))
-        return {c.name: {k: np.concatenate([p[c.name][k] for p in parts]) for k in parts[0][c.name]} for c in cols} if parts else {}
+        return (
+            {c.name: {k: np.concatenate([p[c.name][k] for p in parts]) for k in parts[0][c.name]} for c in cols}
+            if parts
+            else {}
+        )
 
     def predict(self, smiles, columns=None, details=False, batch_size=BATCH, progress=None):
         """One row per molecule: P on the teacher's scale per column (NaN for unparseable SMILES).

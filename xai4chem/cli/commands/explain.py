@@ -5,8 +5,21 @@ from xai4chem.cli import options
 
 @click.command("explain")
 @options.model_dir()
-@click.option("--input", "-i", "input_file", required=True, type=click.Path(exists=True, dir_okay=False), help="Molecules to explain: a CSV/TSV/Parquet with a SMILES column.")
-@click.option("--output-dir", "-o", required=True, type=click.Path(file_okay=False), help="Where to write predictions, attributions and the gallery.")
+@click.option(
+    "--input",
+    "-i",
+    "input_file",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="Molecules to explain: a CSV/TSV/Parquet with a SMILES column.",
+)
+@click.option(
+    "--output-dir",
+    "-o",
+    required=True,
+    type=click.Path(file_okay=False),
+    help="Where to write predictions, attributions and the gallery.",
+)
 @options.columns()
 @options.smiles_column()
 @click.option("--id-column", default=None, help="Column naming each molecule (default: mol_0000, mol_0001, …).")
@@ -20,14 +33,17 @@ def explain_cmd(model_dir, input_file, output_dir, columns, smiles_column, id_co
     With a hard head, every molecule gets three views (teacher, experiments, combined) plus a map of
     where the experiments disagree with the teacher, the blend weight a and the nearest labelled molecule.
     """
-    from xai4chem.io import read_table, smiles_column as find_smiles
+    from xai4chem.io import read_table
+    from xai4chem.io import smiles_column as find_smiles
     from xai4chem.model import XAIModel
     from xai4chem.reporting.molecules import explain_molecules
 
     df = read_table(input_file)
     smiles = df[find_smiles(df, smiles_column)].astype(str).tolist()
     ids = df[id_column].astype(str).tolist() if id_column else None
-    explain_molecules(XAIModel(model_dir), smiles, output_dir, ids=ids, columns=options.split(columns), png=png, gallery=gallery)
+    explain_molecules(
+        XAIModel(model_dir), smiles, output_dir, ids=ids, columns=options.split(columns), png=png, gallery=gallery
+    )
     if open_browser and gallery:
         import webbrowser
         from pathlib import Path

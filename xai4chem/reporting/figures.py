@@ -75,7 +75,9 @@ def beeswarm(ax, stylia, phi, X, labels, top=12, seed=0):
 
     importance = np.abs(phi).mean(0)
     order = np.argsort(-importance)[:top][::-1]
-    cmap = LinearSegmentedColormap.from_list("val", [_article(stylia, "cobalt"), "#E6E6EE", _article(stylia, "crimson")])
+    cmap = LinearSegmentedColormap.from_list(
+        "val", [_article(stylia, "cobalt"), "#E6E6EE", _article(stylia, "crimson")]
+    )
     rng = np.random.default_rng(seed)
     for row, f in enumerate(order):
         x = X[:, f]
@@ -86,26 +88,28 @@ def beeswarm(ax, stylia, phi, X, labels, top=12, seed=0):
     ax.axvline(0, color=_article(stylia, "silver"), zorder=0)
     ax.set_yticks(np.arange(len(order)))
     ax.set_yticklabels([_short(labels[i]) for i in order])
-    stylia.label(ax, xlabel="SHAP value (low feature value → blue, high → red)", ylabel="", title="Per-molecule effects")
+    stylia.label(
+        ax, xlabel="SHAP value (low feature value → blue, high → red)", ylabel="", title="Per-molecule effects"
+    )
 
 
 def isotonic_curve(ax, stylia, iso, h_values=None):
+    """The isotonic map from H's margin to S's scale, with a rug of the labelled molecules' margins."""
     x, y = np.asarray(iso["x"]), np.asarray(iso["y"])
+    ax.plot(x, y, color=_article(stylia, "orchid"))
     if h_values is not None and len(h_values):
-        ax.hist(h_values, bins=40, color=_article(stylia, "orchid"), alpha=0.25, density=True, zorder=0)
-        twin = ax.twinx()
-        twin.plot(x, y, color=_article(stylia, "orchid"))
-        twin.set_ylabel("H_S (S scale)")
-    else:
-        ax.plot(x, y, color=_article(stylia, "orchid"))
-    stylia.label(ax, xlabel="H margin", ylabel="Density of labelled molecules", title="H → S calibration")
+        lo = float(np.min(y))
+        ax.plot(h_values, np.full(len(h_values), lo), "|", color=_article(stylia, "silver"), alpha=0.6)
+    stylia.label(ax, xlabel="H margin", ylabel="H_S (S scale)", title="H → S calibration")
 
 
 def gate_histogram(ax, stylia, T, t_lo, t_hi):
     ax.hist(T, bins=50, color=_article(stylia, "amber"))
     for t in (t_lo, t_hi):
         ax.axvline(t, color=_article(stylia, "silver"), linestyle="--")
-    stylia.label(ax, xlabel="1-NN Tanimoto to the labelled set (T)", ylabel="Library molecules", title="Reach of the hard head")
+    stylia.label(
+        ax, xlabel="1-NN Tanimoto to the labelled set (T)", ylabel="Library molecules", title="Reach of the hard head"
+    )
 
 
 def _short(label, width=38):

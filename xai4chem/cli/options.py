@@ -29,7 +29,9 @@ def columns():
 
 
 def smiles_column(flag="--smiles-column"):
-    return click.option(flag, default=None, help="Name of the SMILES column (default: `smiles`/`input`, else the first column).")
+    return click.option(
+        flag, default=None, help="Name of the SMILES column (default: `smiles`/`input`, else the first column)."
+    )
 
 
 def split(value):

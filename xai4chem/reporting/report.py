@@ -52,20 +52,21 @@ def _direction_badge(d):
 
 def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
     rows = []
+    vmax = float(df["mean_abs_shap"].head(TOP).max()) or 1.0
     for _, r in df.head(TOP).iterrows():
         drawing = ""
         if featurizer_name == "morgan" and bit_dictionary is not None:
             bit = int(str(r["feature"]).split("-")[1])
             frags = bit_dictionary.get(str(bit), {}).get("fragments", [])
             if frags:
-                drawing = fragment_svg(frags[0]["smiles"], size=90)
+                drawing = fragment_svg(frags[0]["smiles"], size=64)
         elif featurizer_name == "accfg" and smarts is not None:
             idx = int(str(r["feature"]).split("-")[1])
-            drawing = fragment_svg(smarts[idx], size=90, smarts=True)
+            drawing = fragment_svg(smarts[idx], size=64, smarts=True)
         cells = [
-            f'<div style="width:90px">{drawing}</div>' if drawing else "",
+            f'<div class="frag">{drawing}</div>' if drawing else "",
             H.esc(r["label"]),
-            _f(r["mean_abs_shap"]),
+            f'<span class="ibar" style="width:{60 * r["mean_abs_shap"] / vmax:.0f}px"></span> {_f(r["mean_abs_shap"])}',
             _direction_badge(r["direction"]),
             _f(r["frequency"], "{:.1%}"),
             _f(r["mean_abs_shap_when_present"]),
@@ -104,12 +105,19 @@ def write_report(model_dir, output, open_browser=False):
     for col in manifest["columns"]:
         exp = column_dir(model_dir, col["id"]) / EXPLAIN_DIRNAME
         if not (exp / "summary.json").exists():
-            raise FileNotFoundError(f"No global explanations for {col['name']!r}. Run `xai4chem explain-global -m {model_dir}` first.")
+            raise FileNotFoundError(
+                f"No global explanations for {col['name']!r}. Run `xai4chem explain-global -m {model_dir}` first."
+            )
         s = read_json(exp / "summary.json")
         fid = s["fidelity"]
         hard = s.get("hard")
         stats = [
-            H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules", tip="R² of S against the teacher, on S's scale"),
+            H.stat(
+                "Fidelity R²",
+                _f(fid["r2"]),
+                f"{fid['n']:,} held-out library molecules",
+                tip="R² of S against the teacher, on S's scale",
+            ),
             H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),
         ]
         if s.get("stability_spearman") is not None:
@@ -118,37 +126,70 @@ def write_report(model_dir, output, open_browser=False):
             cv = hard["cv"]
             cv_v, cv_k = (cv["auroc"], "CV AUROC") if "auroc" in cv else (cv["spearman"], "CV Spearman")
             stats.append(H.stat(cv_k, _f(cv_v), f"H on {hard['n_labels']:,} labels"))
-            stats.append(H.stat("a_max", _f(hard["a_max"], "{:.2f}"), f"R² of H_S vs teacher {_f(hard['alignment_r2'], '{:.2f}')}"))
+            stats.append(
+                H.stat(
+                    "a_max", _f(hard["a_max"], "{:.2f}"), f"R² of H_S vs teacher {_f(hard['alignment_r2'], '{:.2f}')}"
+                )
+            )
         content = [H.kpis(stats)]
         figs = []
         if (exp / "s_fidelity.png").exists():
             figs.append(H.figure(exp / "s_fidelity.png", "Teacher against S on held-out library molecules."))
-        figs.append(H.figure(exp / "s_importance.png", "Mean |SHAP| over the panel; red raises, blue lowers."))
-        content.append(f'<div class="figrow" style="margin-top:14px">{"".join(figs)}</div>')
-        content.append(H.figure(exp / "s_beeswarm.png", "Each dot is one panel molecule; colour is the feature's value."))
+        figs.append(
+            H.figure(
+                exp / "s_beeswarm.png",
+                "Effect of the top features; each dot is one panel molecule, coloured by the feature's value.",
+            )
+        )
+        content.append(f'<div class="figrow2" style="margin-top:14px">{"".join(figs)}</div>')
         top_s = pd.read_csv(exp / "global_s.csv")
-        content.append('<h3 style="margin-top:18px; font-size:13px">Top features</h3>' + _top_table(top_s, featurizer, bit_dictionary, smarts))
-        body.append(H.section(f"{col['name']} · what the teacher has learned", "".join(content), hint=f"panel of {s['panel_size']:,} library molecules"))
+        content.append(
+            '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
+            + _top_table(top_s, featurizer, bit_dictionary, smarts)
+        )
+        body.append(
+            H.section(
+                f"{col['name']} · what the teacher has learned",
+                "".join(content),
+                hint=f"panel of {s['panel_size']:,} library molecules",
+            )
+        )
 
         if hard:
             hc = [
                 H.kpis(
                     [
                         H.stat("Task", hard["task"], f"{hard['n_labels']:,} labelled molecules"),
-                        H.stat("Reach", _f(hard.get("frac_panel_gated"), "{:.1%}"), f"of the library has a > 0 (T ≥ {hard['t_lo']})"),
-                        H.stat("Agreement", _f(hard.get("importance_spearman_s_vs_hs"), "{:.2f}"), "S vs H_S importances (ρ)"),
+                        H.stat(
+                            "Reach",
+                            _f(hard.get("frac_panel_gated"), "{:.1%}"),
+                            f"of the library has a > 0 (T ≥ {hard['t_lo']})",
+                        ),
+                        H.stat(
+                            "Agreement",
+                            _f(hard.get("importance_spearman_s_vs_hs"), "{:.2f}"),
+                            "S vs H_S importances (ρ)",
+                        ),
                         H.stat("Calibration", hard["isotonic_direction"], "isotonic H → S map"),
                     ]
                 )
             ]
             hfigs = [
-                H.figure(exp / "hs_calibration.png", "Isotonic map from H's margin onto S's scale."),
-                H.figure(exp / "hs_reach.png", "Similarity of library molecules to the labelled set."),
-                H.figure(exp / "hs_importance.png", "What the experiments say, on S's scale."),
+                H.figure(
+                    exp / "hs_calibration.png",
+                    "Isotonic map from H's margin onto S's scale; ticks are labelled molecules.",
+                ),
+                H.figure(
+                    exp / "hs_reach.png",
+                    "Similarity of library molecules to the labelled set; dashed lines are the ramp of the gate.",
+                ),
             ]
-            hc.append(f'<div class="figrow" style="margin-top:14px">{"".join(hfigs)}</div>')
+            hc.append(f'<div class="figrow2" style="margin-top:14px">{"".join(hfigs)}</div>')
             top_h = pd.read_csv(exp / "global_hs.csv")
-            hc.append('<h3 style="margin-top:18px; font-size:13px">Top features according to the experiments</h3>' + _top_table(top_h, featurizer, bit_dictionary, smarts))
+            hc.append(
+                '<h3 style="margin-top:18px; font-size:13px">Top features according to the experiments</h3>'
+                + _top_table(top_h, featurizer, bit_dictionary, smarts)
+            )
             body.append(H.section(f"{col['name']} · experiments", "".join(hc), hint="hard labels, H_S"))
 
     lede = (
@@ -166,7 +207,11 @@ def write_report(model_dir, output, open_browser=False):
     output.write_text(page)
     summary_panel(
         "xai4chem · report",
-        [("Report", f"[dim]{cpath(output)}[/]"), ("Size", f"{output.stat().st_size / 1e6:.1f} MB"), ("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]")],
+        [
+            ("Report", f"[dim]{cpath(output)}[/]"),
+            ("Size", f"{output.stat().st_size / 1e6:.1f} MB"),
+            ("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]"),
+        ],
         border_style=color,
         icon="✓",
     )

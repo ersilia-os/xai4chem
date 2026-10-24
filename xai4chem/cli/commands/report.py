@@ -5,7 +5,9 @@ from xai4chem.cli import options
 
 @click.command("report")
 @options.model_dir()
-@click.option("--output", "-o", default=None, type=click.Path(), help="HTML file or directory (default: <model-dir>/report.html).")
+@click.option(
+    "--output", "-o", default=None, type=click.Path(), help="HTML file or directory (default: <model-dir>/report.html)."
+)
 @click.option("--open", "open_browser", is_flag=True, help="Open the report in a browser.")
 @options.friendly_errors
 def report_cmd(model_dir, output, open_browser):

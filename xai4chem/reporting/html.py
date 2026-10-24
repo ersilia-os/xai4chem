@@ -50,6 +50,11 @@ EXTRA_CSS = """
 .kpis { display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:12px; margin-top:14px; }
 .figrow { display:grid; grid-template-columns:repeat(auto-fit,minmax(320px,1fr)); gap:14px; }
 .figrow figure { margin:0; }
+.figrow2 { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,2fr); gap:14px; align-items:start; }
+@media (max-width:760px) { .figrow2 { grid-template-columns:1fr; } }
+.figrow2 figure { margin:0; }
+.ibar { display:inline-block; vertical-align:middle; height:6px; border-radius:999px; background:var(--brand); opacity:.75; }
+td .frag svg { width:64px; height:64px; display:block; }
 .figrow img, figure img { width:100%; height:auto; display:block; }
 figcaption { font-size:11.5px; color:var(--muted); margin-top:6px; }
 .contrib { display:grid; grid-template-columns:minmax(0,1fr) 120px 58px; gap:4px 10px; align-items:center; font-size:12px; }
@@ -121,9 +126,13 @@ def badge(text, kind=None, hue=None):
 def table(headers, rows, numeric=(), table_id=None):
     """``rows`` are lists of already-escaped HTML cells; ``numeric`` are column indices to right-align."""
     numeric = set(numeric)
-    head = "".join(f'<th class="num">{esc(h)}</th>' if i in numeric else f"<th>{esc(h)}</th>" for i, h in enumerate(headers))
+    head = "".join(
+        f'<th class="num">{esc(h)}</th>' if i in numeric else f"<th>{esc(h)}</th>" for i, h in enumerate(headers)
+    )
     body = "".join(
-        "<tr>" + "".join(f'<td class="num">{c}</td>' if i in numeric else f"<td>{c}</td>" for i, c in enumerate(r)) + "</tr>"
+        "<tr>"
+        + "".join(f'<td class="num">{c}</td>' if i in numeric else f"<td>{c}</td>" for i, c in enumerate(r))
+        + "</tr>"
         for r in rows
     )
     tid = f' id="{table_id}"' if table_id else ""
@@ -147,8 +156,30 @@ def contributions(items, scale=None):
     return f'<div class="contrib">{"".join(rows)}</div>'
 
 
+EMBED_WIDTH = 1400
+
+
+def _embedded_png(path):
+    """PNG bytes for embedding: figures are saved at 600 dpi, far more than a page needs."""
+    raw = Path(path).read_bytes()
+    try:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(raw))
+        if img.width <= EMBED_WIDTH:
+            return raw
+        img = img.resize((EMBED_WIDTH, round(img.height * EMBED_WIDTH / img.width)), Image.LANCZOS)
+        buf = io.BytesIO()
+        img.save(buf, format="PNG", optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return raw
+
+
 def img_png(path, alt=""):
-    data = base64.b64encode(Path(path).read_bytes()).decode()
+    data = base64.b64encode(_embedded_png(path)).decode()
     return f'<img src="data:image/png;base64,{data}" alt="{esc(alt)}">'
 
 

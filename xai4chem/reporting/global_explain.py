@@ -35,7 +35,9 @@ class _Accumulator(object):
     def __init__(self, n_features):
         self.n = 0
         z = lambda: np.zeros(n_features)  # noqa: E731
-        self.sx, self.sxx, self.sp, self.spp, self.sxp, self.sabs, self.present, self.abs_present = (z() for _ in range(8))
+        self.sx, self.sxx, self.sp, self.spp, self.sxp, self.sabs, self.present, self.abs_present = (
+            z() for _ in range(8)
+        )
 
     def add(self, X, phi):
         present = X > 0
@@ -105,7 +107,11 @@ def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
     rows = library.panel()
     if max_rows is not None:
         rows = rows[:max_rows]
-    rule("xai4chem · explain-global", style=color, right=f"{len(model.columns)} column(s) · panel of {len(rows):,} library molecules")
+    rule(
+        "xai4chem · explain-global",
+        style=color,
+        right=f"{len(model.columns)} column(s) · panel of {len(rows):,} library molecules",
+    )
     featurizer = model.featurizer
     labels = featurizer.labels()
     names = featurizer.feature_names
@@ -117,7 +123,9 @@ def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
     else:
         X_panel = library.matrix(featurizer.name, rows).astype(np.float32)
     plot_idx = np.sort(np.random.default_rng(seed).permutation(len(rows))[:PLOT_ROWS])
-    panel_fps = library.csr("morgan", rows, verb="reading panel fingerprints") if any(c.hard for c in model.columns) else None
+    panel_fps = (
+        library.csr("morgan", rows, verb="reading panel fingerprints") if any(c.hard for c in model.columns) else None
+    )
 
     summaries = []
     with LiveTable(
@@ -145,7 +153,9 @@ def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
             tab.to_csv(out / "global_s.csv", index=False)
             importance = acc.sabs / max(acc.n, 1)
             direction = tab.set_index("feature").loc[names, "direction"].to_numpy()
-            figs = draw_global_figures(out, "s", np.vstack(phi_plot), _dense(X_panel[plot_idx]), importance, direction, labels)
+            figs = draw_global_figures(
+                out, "s", np.vstack(phi_plot), _dense(X_panel[plot_idx]), importance, direction, labels
+            )
             _fidelity_figure(col, out)
             summary = {
                 "name": col.name,
@@ -168,7 +178,9 @@ def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
                 tab_h.to_csv(out / "global_hs.csv", index=False)
                 imp_h = np.abs(rh["phi_HS"]).mean(0)
                 dir_h = tab_h.set_index("feature").loc[names, "direction"].to_numpy()
-                figs_h = draw_global_figures(out, "hs", rh["phi_HS"][:PLOT_ROWS], Xh[:PLOT_ROWS].astype(np.float32), imp_h, dir_h, labels)
+                figs_h = draw_global_figures(
+                    out, "hs", rh["phi_HS"][:PLOT_ROWS], Xh[:PLOT_ROWS].astype(np.float32), imp_h, dir_h, labels
+                )
                 imp_s = np.abs(rh["phi_S"]).mean(0)
                 used = (imp_s > 0) | (imp_h > 0)
                 rho = float(spearmanr(imp_s[used], imp_h[used]).statistic) if used.sum() > 2 else float("nan")
@@ -185,10 +197,20 @@ def explain_global(model_dir, library_dir=None, max_rows=None, seed=42):
                 agreement = f"ρ {rho:.2f}"
             write_json(out / "summary.json", summary)
             summaries.append(summary)
-            table.finish(col.name, **{"Top feature": tab.iloc[0]["label"][:40], "Agreement S~H_S": agreement, "Time": elapsed(time.time() - col_started)})
+            table.finish(
+                col.name,
+                **{
+                    "Top feature": tab.iloc[0]["label"][:40],
+                    "Agreement S~H_S": agreement,
+                    "Time": elapsed(time.time() - col_started),
+                },
+            )
 
     rows_out = [(s["name"], f"top: {s['top_features'][0]['label']}") for s in summaries]
-    rows_out += [("Outputs", f"[dim]{cpath(model.dir)}/columns/*/explain[/]"), ("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]")]
+    rows_out += [
+        ("Outputs", f"[dim]{cpath(model.dir)}/columns/*/explain[/]"),
+        ("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]"),
+    ]
     summary_panel("xai4chem · explain-global", rows_out, border_style=color, icon="✓")
     return model
 
@@ -213,7 +235,7 @@ def _hard_figures(hh, h_labelled, T_panel, out):
     from xai4chem.reporting.figures import gate_histogram, import_stylia, isotonic_curve
 
     stylia = import_stylia()
-    _, axs = stylia.create_figure(1, 1)
+    _, axs = stylia.create_figure(1, 1, width=0.5, height=0.5)
     isotonic_curve(axs.next(), stylia, hh.iso, h_labelled)
     stylia.save_figure(str(out / "hs_calibration.png"))
     _, axs = stylia.create_figure(1, 1)

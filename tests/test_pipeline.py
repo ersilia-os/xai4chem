@@ -26,7 +26,23 @@ def run(args):
 def library(workspace):
     root, _ = workspace
     lib = root / "library"
-    run(["setup", "--library", root / "library_input.csv", "--library-dir", lib, "-f", "all", "--panel-size", 300, "--bit-dictionary-mols", 500, "-j", 1])
+    run(
+        [
+            "setup",
+            "--library",
+            root / "library_input.csv",
+            "--library-dir",
+            lib,
+            "-f",
+            "all",
+            "--panel-size",
+            300,
+            "--bit-dictionary-mols",
+            500,
+            "-j",
+            1,
+        ]
+    )
     return root, lib
 
 
@@ -34,7 +50,23 @@ def library(workspace):
 def fitted(request, library):
     root, lib = library
     model_dir = root / f"model_{request.param}"
-    run(["fit", "-s", root / "soft.csv", "-h", root / "hard.csv", "-f", request.param, "--library-dir", lib, "-m", model_dir, "--n-estimators", 300])
+    run(
+        [
+            "fit",
+            "-s",
+            root / "soft.csv",
+            "-h",
+            root / "hard.csv",
+            "-f",
+            request.param,
+            "--library-dir",
+            lib,
+            "-m",
+            model_dir,
+            "--n-estimators",
+            300,
+        ]
+    )
     return root, model_dir, request.param
 
 
@@ -115,7 +147,9 @@ def test_hard_head_and_golden(fitted):
 def test_commands(fitted):
     root, model_dir, featurizer = fitted
     out = root / f"explain_{featurizer}"
-    pd.DataFrame({"smiles": QUERIES + ["xx"], "name": ["anilide", "nitro", "butanol", "bad"]}).to_csv(root / "q.csv", index=False)
+    pd.DataFrame({"smiles": QUERIES + ["xx"], "name": ["anilide", "nitro", "butanol", "bad"]}).to_csv(
+        root / "q.csv", index=False
+    )
     run(["explain", "-m", model_dir, "-i", root / "q.csv", "-o", out, "--id-column", "name", "--png"])
     pred = pd.read_csv(out / "predictions.csv")
     assert {"activity", "activity_S", "activity_HS", "activity_a", "activity_nearest_smiles"} <= set(pred.columns)
@@ -127,7 +161,19 @@ def test_commands(fitted):
     assert len(pd.read_csv(root / f"pred_{featurizer}.csv")) == 4
     assert (model_dir / "report.html").exists()
     run(["report", "-m", model_dir, "-o", root / f"report_{featurizer}.html"])
-    run(["validate", "-m", model_dir, "-s", root / "soft.csv", "-h", root / "hard.csv", "-o", root / f"val_{featurizer}.json"])
+    run(
+        [
+            "validate",
+            "-m",
+            model_dir,
+            "-s",
+            root / "soft.csv",
+            "-h",
+            root / "hard.csv",
+            "-o",
+            root / f"val_{featurizer}.json",
+        ]
+    )
     val = json.loads((root / f"val_{featurizer}.json").read_text())
     assert val["activity"]["soft_S"]["r2"] > 0.5
     run(["info", "-m", model_dir])
@@ -135,7 +181,9 @@ def test_commands(fitted):
 
 def test_fit_refuses_to_overwrite(fitted):
     root, model_dir, featurizer = fitted
-    result = CliRunner().invoke(create_cli(), ["fit", "-s", str(root / "soft.csv"), "-m", str(model_dir), "-f", featurizer])
+    result = CliRunner().invoke(
+        create_cli(), ["fit", "-s", str(root / "soft.csv"), "-m", str(model_dir), "-f", featurizer]
+    )
     assert result.exit_code != 0
     assert "--force" in result.output
 

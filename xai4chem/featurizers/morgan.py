@@ -59,28 +59,35 @@ class MorganFingerprint(object):
         self.bit_dictionary = None
 
     def fit(self, smiles=None):
+        """Learn any data-dependent state (see :mod:`xai4chem.featurizers`); returns ``self``."""
         return self
 
     def transform(self, smiles):
+        """Featurize ``smiles`` into a float32 matrix, one row per molecule."""
         return morgan_featurizer(smiles).astype(np.float32)
 
     def transform_raw(self, smiles):
+        """Featurize ``smiles`` in the storage dtype (uint8 counts, float32 descriptors)."""
         return morgan_featurizer(smiles)
 
     def labels(self):
+        """Human-readable feature names, aligned with ``feature_names``."""
         if self.bit_dictionary is None:
             return ["bit {0}".format(i) for i in range(NBITS)]
         return [self.bit_dictionary.label(i) for i in range(NBITS)]
 
     def atom_groups(self, mol):
+        """For each feature present in ``mol``, the atom-index tuples of its occurrences."""
         # Each occurrence is attributed to its centre atom, as in xai4chem v1
         return {bit: [(center,) for center, _ in occ] for bit, occ in morgan_bit_info(mol).items()}
 
     def to_config(self):
+        """A JSON-serialisable description, stored in model and library manifests."""
         return {"name": self.name, "radius": RADIUS, "nbits": NBITS, "count_clip": COUNT_CLIP}
 
     @classmethod
     def from_config(cls, cfg):
+        """Rebuild the featurizer from the dict written by ``to_config``."""
         if cfg.get("count_clip", COUNT_CLIP) != COUNT_CLIP:
             raise ValueError(
                 f"This model was trained on Morgan counts clipped at {cfg.get('count_clip')}; "
