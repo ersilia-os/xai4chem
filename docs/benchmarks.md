@@ -50,7 +50,7 @@ On 12 marketed drugs, none of them in the library, the Morgan surrogate reaches 
 |---|---|
 | `predict`, all 1,355,109 library molecules, AccFG model with hard head | 1 min 10 s |
 | `explain`, 12 molecules with gallery (including start-up) | ~3 s |
-| `explain`, 1,000 molecules, AccFG with hard head, applicability check, 100-card gallery | 21 s |
+| `explain`, 1,000 molecules, AccFG with hard head, applicability check, 100-card gallery | 13 s |
 
 Notes:
 - `predict` reads the library's precomputed features for molecules found there and featurizes the rest
