@@ -14,6 +14,16 @@ SVG_SIZE = 260
 PNG_SIZE = 400
 
 
+# RDKit draws in pure black and greys; map them onto the Ersilia ink tokens so drawings sit in the page
+_SVG_INK = {"#000000": "#2C3E50", "#191919": "#2C3E50", "#7F7F7F": "#9A93A6", "#7f7f7f": "#9A93A6"}
+
+
+def _brand(svg):
+    for old, new in _SVG_INK.items():
+        svg = svg.replace(old, new)
+    return svg
+
+
 def atom_attributions(featurizer, mol, phi_row):
     """Distribute feature attributions onto atoms.
 
@@ -82,7 +92,7 @@ def atom_svg(mol, scores, vmax, size=SVG_SIZE):
     )
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
-    return svg[svg.index("<svg") :]
+    return _brand(svg[svg.index("<svg") :])
 
 
 def plain_svg(mol, size=SVG_SIZE):
@@ -91,7 +101,7 @@ def plain_svg(mol, size=SVG_SIZE):
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
-    return svg[svg.index("<svg") :]
+    return _brand(svg[svg.index("<svg") :])
 
 
 def atom_png(mol, panels, output_path, vmax):
@@ -132,13 +142,14 @@ def fragment_svg(smiles_or_smarts, size=150, smarts=False):
         return ""
     drawer = rdMolDraw2D.MolDraw2DSVG(size, size)
     opts = drawer.drawOptions()
+    opts.useBWAtomPalette()
     opts.clearBackground = False
     opts.maxFontSize = 14
     opts.padding = 0.12
     drawer.DrawMolecule(mol)
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
-    return svg[svg.index("<svg") :]
+    return _brand(svg[svg.index("<svg") :])
 
 
 __all__ = ["atom_attributions", "atom_svg", "plain_svg", "atom_png", "fragment_svg", "prepare", "Draw"]
