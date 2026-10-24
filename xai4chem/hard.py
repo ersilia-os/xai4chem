@@ -38,6 +38,7 @@ from xai4chem.console import path as cpath
 from xai4chem.featurizers import featurizer_from_config
 from xai4chem.io import match_hard_columns, read_labels
 from xai4chem.library import ReferenceLibrary
+from xai4chem.log import logger
 from xai4chem.run import (
     H_NAME,
     H_TO_S_NAME,
@@ -239,6 +240,10 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
                 "increasing": bool(iso.increasing_),
             }
             alignment_r2 = float(r2_score(z[ok[half:]], apply_isotonic(h_lib[half:], iso_map)))
+            logger.debug(
+                f"[{hard_name}] isotonic map: {len(iso_map['x'])} knots from {half:,} molecules, judged on "
+                f"{len(ok) - half:,} · CV {cv}"
+            )
             a_max = blend_ceiling(alignment_r2)
 
             reach = {}

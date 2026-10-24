@@ -214,7 +214,13 @@ def write_report(model_dir, output, open_browser=False):
                         ),
                         H.stat("Calibration", hard["isotonic_direction"], "isotonic H → S map"),
                     ]
-                )
+                ),
+                (
+                    f'<p class="muted" style="font-size:12px;margin-top:10px">Blend: P = (1 − a)·S + a·H_S with '
+                    f"a = {hard['a_max']:.2f} × ramp(T), rising from 0 at T = {hard['t_lo']} to {hard['a_max']:.2f} "
+                    f"at T = {hard['t_hi']} (Tanimoto to the nearest labelled molecule). a_max is the R² of H_S "
+                    "against the teacher on held-out library molecules, capped at 0.66.</p>"
+                ),
             ]
             hfigs = [
                 H.figure(

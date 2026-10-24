@@ -40,6 +40,7 @@ from xai4chem.console import path as cpath
 from xai4chem.io import read_labels
 from xai4chem.library import BIT_DICTIONARY_NAME as LIB_BIT_DICTIONARY_NAME
 from xai4chem.library import ReferenceLibrary
+from xai4chem.log import logger
 from xai4chem.run import (
     BIT_DICTIONARY_NAME,
     FIDELITY_NAME,
@@ -156,6 +157,7 @@ def train_booster(X, y, sparse, seed, n_estimators=2000, val_frac=VAL_FRAC, para
         "seed": seed,
         **(params or {}),
     }
+    logger.debug(f"boosting {len(trn):,} train / {len(val):,} validation rows · params {full}")
     callbacks = [_progress_callback(progress, n_estimators)] if progress is not None else []
     booster = xgb.train(
         full,
