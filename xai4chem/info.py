@@ -27,16 +27,11 @@ def show_info(model_dir):
         ]
     )
     table = Table(box=box.SIMPLE_HEAD, header_style="bold", pad_edge=False, title="Columns", title_justify="left")
-    for name, justify in [
-        ("Column", "left"),
-        ("Scale", "left"),
-        ("R²", "right"),
-        ("ρ", "right"),
-        ("Trees", "right"),
-        ("Hard head", "left"),
-        ("a_max", "right"),
-    ]:
-        table.add_column(name, justify=justify, no_wrap=True)
+    for name, justify in [("Column", "left"), ("Scale", "left"), ("R²", "right"), ("ρ", "right"), ("Trees", "right")]:
+        table.add_column(name, justify=justify, no_wrap=True, min_width=max(len(name), 5))
+    # The hard-head description is the only long cell: let it wrap rather than squeeze the numbers
+    table.add_column("Hard head", justify="left", overflow="fold", ratio=1)
+    table.add_column("a_max", justify="right", no_wrap=True, min_width=5)
     tops = []
     for col in m["columns"]:
         cdir = column_dir(model_dir, col["id"])
@@ -46,7 +41,7 @@ def show_info(model_dir):
             h = read_json(hard_dir(model_dir, col["id"]) / "hard_meta.json")
             cv = h["cv"]
             metric = f"AUROC {cv['auroc']:.3f}" if "auroc" in cv else f"ρ {cv['spearman']:.3f}"
-            hard = f"{h['task']} · {h['n_labels']:,} labels · CV {metric}"
+            hard = f"{h['task']} · {h['n_labels']:,} · CV {metric}"
             a_max = f"{h['a_max']:.2f}"
         table.add_row(
             col["name"],

@@ -135,7 +135,7 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
     with LiveTable(
         model.column_names,
         title="Explaining",
-        fields=["Top feature", "Agreement S~H_S", "Time"],
+        fields=["Top feature"] + (["Agreement S~H_S"] if any(c.hard for c in model.columns) else []) + ["Time"],
         item_label="Column",
         running_verb="explaining",
         color=color,
