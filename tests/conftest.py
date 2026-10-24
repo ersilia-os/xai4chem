@@ -88,5 +88,8 @@ def workspace(tmp_path_factory):
     pd.DataFrame({"smiles": smiles, "activity": soft, "noisy": soft2}).to_csv(root / "soft.csv", index=False)
     take = rng.choice(len(smiles), size=150, replace=False)
     hs = [smiles[i] for i in take]
-    pd.DataFrame({"smiles": hs, "activity": experiments(hs)}).to_csv(root / "hard.csv", index=False)
+    # An `id` column must be ignored, not mistaken for a measurement
+    pd.DataFrame({"id": range(len(hs)), "smiles": hs, "activity": experiments(hs)}).to_csv(
+        root / "hard.csv", index=False
+    )
     return root, smiles

@@ -23,6 +23,7 @@ from xai4chem.console import STEP_COLORS, console, echo, elapsed, rule, set_acti
 from xai4chem.console import path as cpath
 from xai4chem.reporting import html as H
 from xai4chem.reporting.drawing import atom_attributions, atom_png, atom_svg, prepare
+from xai4chem.soft import inverse
 
 TOP_FEATURES = 20
 CARD_FEATURES = 8
@@ -101,11 +102,12 @@ def _prediction_rows(cols, res, ids, smiles, mols):
     df = pd.DataFrame({"id": ids, "smiles": smiles, "valid": [m is not None for m in mols]})
     for col in cols:
         r = res[col.name]
+        # Same columns, same (teacher) scale as `predict --details`
         df[col.name] = r["prob"]
-        df[f"{col.name}_S"] = r["S"]
+        df[f"{col.name}_S"] = inverse(r["S"], col.transform)
         if col.hard is not None:
             hh = col.hard
-            df[f"{col.name}_HS"] = r["HS"]
+            df[f"{col.name}_HS"] = inverse(r["HS"], col.transform)
             df[f"{col.name}_T"] = r["T"]
             df[f"{col.name}_a"] = r["a"]
             df[f"{col.name}_nearest_smiles"] = [hh.labelled_smiles[j] if j >= 0 else None for j in r["nearest"]]

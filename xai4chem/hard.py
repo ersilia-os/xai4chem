@@ -149,8 +149,13 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
     library = ReferenceLibrary(library_dir or manifest["library"]["dir"])
     smiles, Y = read_labels(hard_labels, smiles_col=smiles_col, label_cols=label_cols)
     by_name = {c["name"]: c for c in manifest["columns"]}
-    mapping = match_hard_columns(list(by_name), list(Y.columns))
+    mapping = match_hard_columns(list(by_name), list(Y.columns), strict=False)
+    ignored = [c for c in Y.columns if c not in mapping]
+    if not mapping:
+        raise ValueError(f"No column of {hard_labels} matches a soft-label column ({list(by_name)}).")
     rule("xai4chem · learn-hard", style=color, right=f"{len(mapping)} column(s) · {len(smiles):,} labelled molecules")
+    if ignored:
+        echo(f"ignoring columns that match no soft-label column: {', '.join(map(str, ignored))}", "warning")
     for hard, soft in mapping.items():
         if hard != soft:
             echo(f"hard column [bold]{hard}[/] refines soft column [bold]{soft}[/]", "info")
@@ -180,6 +185,13 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
             table.start(hard_name)
             col_started = time.time()
             col = by_name[soft_name]
+            stale = hard_dir(model_dir, col["id"])
+            if stale.exists():
+                # A head from an earlier learn-hard must not survive, least of all when this run decides
+                # the column should stay soft-only
+                import shutil
+
+                shutil.rmtree(stale)
             y = Y[hard_name].to_numpy(dtype=np.float64)
             mask = np.isfinite(y)
             y = y[mask]

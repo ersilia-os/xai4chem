@@ -19,8 +19,8 @@ def binarize(X):
     """Counts (dense or CSR) → binary float32 CSR."""
     X = X if sp.issparse(X) else sp.csr_matrix(np.asarray(X))
     X = X.tocsr().astype(np.float32)
-    X.data[:] = 1.0
     X.eliminate_zeros()
+    X.data[:] = 1.0
     return X
 
 

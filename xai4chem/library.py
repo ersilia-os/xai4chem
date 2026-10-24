@@ -163,14 +163,29 @@ def write_matrix(path, featurizer, smiles, n_jobs=1):
     tmp.replace(path)
 
 
+def _atom_label(atom):
+    """A radius-0 environment as SMARTS: element, hydrogens, charge, degree and ring membership.
+
+    These are the Morgan atom invariants, so different radius-0 bits get different names (a bare "C"
+    would name half a dozen bits).
+    """
+    sym = atom.GetSymbol().lower() if atom.GetIsAromatic() else atom.GetSymbol()
+    h = atom.GetTotalNumHs()
+    hs = f"H{h}" if h > 1 else ("H" if h == 1 else "")
+    q = atom.GetFormalCharge()
+    charge = "" if q == 0 else ("+" if q == 1 else "-" if q == -1 else f"{q:+d}")
+    ring = ";R" if atom.IsInRing() else ""
+    return f"[{sym}{hs}{charge};D{atom.GetDegree()}{ring}]"
+
+
 def _fragment(mol, center, radius):
     from rdkit import Chem
 
     if radius == 0:
-        return Chem.MolFragmentToSmiles(mol, atomsToUse=[center])
+        return _atom_label(mol.GetAtomWithIdx(center))
     bonds = list(Chem.FindAtomEnvironmentOfRadiusN(mol, radius, center))
     if not bonds:
-        return Chem.MolFragmentToSmiles(mol, atomsToUse=[center])
+        return _atom_label(mol.GetAtomWithIdx(center))
     atoms = set()
     for b in bonds:
         bond = mol.GetBondWithIdx(b)
@@ -350,7 +365,14 @@ class BitDictionary(object):
         if not frags:
             return f"bit {bit}"
         top = frags[0]
-        return f"bit {bit}: {top['smiles']} ({top['share']:.0%})"
+        label = f"bit {bit}: {top['smiles']} ({top['share']:.0%})"
+        if top["share"] < 0.5 and len(frags) > 1:
+            # A collided bit: one substructure would mislead, so name the runner-up and count the rest
+            label += f" · {frags[1]['smiles']} ({frags[1]['share']:.0%})"
+            rest = self.bits[str(bit)]["distinct"] - 2
+            if rest > 0:
+                label += f" · +{rest} more"
+        return label
 
 
 class ReferenceLibrary(object):
@@ -428,10 +450,9 @@ class ReferenceLibrary(object):
             if len(rows) > 0.05 * ds.shape[0]:
                 # Point selection is slow for large row sets; contiguous chunk reads are not
                 return self._gather(ds, rows)
-            order = np.argsort(rows)
-            out = np.empty((len(rows), ds.shape[1]), dtype=ds.dtype)
-            out[order] = ds[rows[order]]
-            return out
+            # h5py point selection needs strictly increasing indices: read each row once, then expand
+            unique, inverse = np.unique(rows, return_inverse=True)
+            return ds[unique][inverse]
 
     @staticmethod
     def _gather(ds, rows):

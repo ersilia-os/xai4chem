@@ -57,14 +57,24 @@ def read_labels(path, smiles_col=None, label_cols=None):
             raise ValueError(f"Label columns {missing} not found in {path}. Columns: {list(df.columns)}")
         tasks = list(label_cols)
     else:
-        tasks = [c for c in df.columns if c != sc and pd.api.types.is_numeric_dtype(df[c])]
+        # `Unnamed: 0` is a pandas index written by to_csv(index=True), never a label
+        tasks = [
+            c
+            for c in df.columns
+            if c != sc and pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("Unnamed:")
+        ]
     if not tasks:
         raise ValueError(f"{path} has no numeric label columns besides the SMILES column {sc!r}.")
     return df[sc].astype(str).tolist(), df[tasks].reset_index(drop=True)
 
 
-def match_hard_columns(soft_columns, hard_columns):
-    """Map each hard-label column onto the soft-label column it refines (Olinda's rule)."""
+def match_hard_columns(soft_columns, hard_columns, strict=True):
+    """Map each hard-label column onto the soft-label column it refines (Olinda's rule).
+
+    With ``strict=False``, columns that match no soft column are left out (and reported by the caller)
+    instead of raising, so an ``id`` or ``year`` column in a measurements file does not abort a fit.
+    Ambiguous and doubly-claimed columns always raise.
+    """
     soft = [str(c) for c in soft_columns]
     mapping, problems = {}, []
     for raw in hard_columns:
@@ -76,7 +86,8 @@ def match_hard_columns(soft_columns, hard_columns):
         if len(candidates) == 1:
             mapping[hard] = candidates[0]
         elif not candidates:
-            problems.append(f"hard column '{hard}' matches no soft column")
+            if strict:
+                problems.append(f"hard column '{hard}' matches no soft column")
         else:
             problems.append(f"hard column '{hard}' is ambiguous: matches {candidates}")
     claimed = {}

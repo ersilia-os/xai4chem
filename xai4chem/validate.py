@@ -8,7 +8,7 @@ from scipy.stats import spearmanr
 from xai4chem.console import STEP_COLORS, console, echo, elapsed, rule, set_active_color, summary_panel
 from xai4chem.console import path as cpath
 from xai4chem.io import match_hard_columns, read_labels
-from xai4chem.model import XAIModel
+from xai4chem.model import XAIModel, valid_mask
 from xai4chem.run import write_json
 from xai4chem.soft import fidelity, forward
 
@@ -52,16 +52,19 @@ def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
         if kind == "soft":
             mapping = {c: c for c in Y.columns if c in model.column_names}
         else:
-            mapping = match_hard_columns(model.column_names, list(Y.columns))
+            mapping = match_hard_columns(model.column_names, list(Y.columns), strict=False)
         unknown = [c for c in Y.columns if c not in mapping]
         if unknown:
             echo(f"skipping columns the model does not have: {unknown}", "warning")
         echo(f"scoring {len(smiles):,} molecules from [dim]{cpath(path)}[/]", "run")
         res = model.scores(smiles, columns=sorted(set(mapping.values())))
+        valid = valid_mask(smiles)
+        if (~valid).any():
+            echo(f"{int((~valid).sum()):,} unparseable SMILES are left out of the metrics", "warning")
         for src, name in mapping.items():
             col = model.column(name)
             y = Y[src].to_numpy(dtype=np.float64)
-            m = np.isfinite(y)
+            m = np.isfinite(y) & valid
             entry = report.setdefault(name, {})
             for out in ("S", "P"):
                 pred = res[name][out][m]

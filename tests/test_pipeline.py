@@ -79,6 +79,9 @@ def test_library_rows_match_on_the_fly(library):
         stored = library.matrix(name, rows[::-1])[::-1]
         fresh = featurizer.transform_raw([library.smiles[i] for i in rows])
         np.testing.assert_allclose(stored, fresh, rtol=1e-6)
+    dup = np.array([5, 1, 5, 3, 1])
+    for name in ("morgan", "accfg", "datamol"):
+        np.testing.assert_array_equal(library.matrix(name, dup), library.matrix(name, [5, 1, 5, 3, 1][::-1])[::-1])
     for name in ("morgan", "accfg"):
         np.testing.assert_array_equal(library.csr(name, rows[::-1]).toarray()[::-1], library.matrix(name, rows))
     bd = library.bit_dictionary()
@@ -202,3 +205,48 @@ def test_surrogate_finds_the_teacher_features(fitted):
     top = pd.read_csv(model_dir / "columns" / "c0" / "explain" / "global_s.csv").head(6)["label"].str.lower()
     assert any("amide" in t for t in top)
     assert any(h in t for t in top for h in ("halo", "chlor", "fluor", "brom"))
+
+
+def test_explain_and_predict_agree_on_scales(fitted):
+    root, model_dir, featurizer = fitted
+    pd.DataFrame({"smiles": QUERIES}).to_csv(root / f"q3_{featurizer}.csv", index=False)
+    run(
+        [
+            "explain",
+            "-m",
+            model_dir,
+            "-i",
+            root / f"q3_{featurizer}.csv",
+            "-o",
+            root / f"ex3_{featurizer}",
+            "--no-gallery",
+        ]
+    )
+    run(
+        [
+            "predict",
+            "-m",
+            model_dir,
+            "-i",
+            root / f"q3_{featurizer}.csv",
+            "-o",
+            root / f"pr3_{featurizer}.csv",
+            "--details",
+        ]
+    )
+    ex = pd.read_csv(root / f"ex3_{featurizer}" / "predictions.csv")
+    pr = pd.read_csv(root / f"pr3_{featurizer}.csv")
+    for c in ("activity", "activity_S", "activity_HS"):
+        np.testing.assert_allclose(ex[c], pr[c], atol=1e-5)
+
+
+def test_rerunning_learn_hard_replaces_the_head(fitted, tmp_path):
+    import shutil
+
+    root, model_dir, featurizer = fitted
+    copy = tmp_path / "m"
+    shutil.copytree(model_dir, copy)
+    hard = pd.read_csv(root / "hard.csv").head(10)
+    hard.to_csv(tmp_path / "few.csv", index=False)
+    run(["learn-hard", "-h", tmp_path / "few.csv", "-m", copy])
+    assert XAIModel(copy).column("activity").hard is None

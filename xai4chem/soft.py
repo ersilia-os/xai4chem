@@ -34,6 +34,7 @@ from xai4chem.console import (
     set_active_color,
     status_line,
     summary_panel,
+    sweep_progress,
 )
 from xai4chem.console import path as cpath
 from xai4chem.io import read_labels
@@ -227,10 +228,21 @@ def align_to_library(smiles, library):
     if len(smiles) == len(lib) and smiles[0] == lib[0] and smiles[-1] == lib[-1] and smiles == lib:
         return np.arange(len(smiles))
     index = library.index
-    return np.array([index.get(s, -1) for s in smiles])
+    rows = np.array([index.get(s, -1) for s in smiles])
+    missing = np.where(rows < 0)[0]
+    if len(missing):
+        # Different writers spell the same molecule differently; retry the misses as RDKit canonical SMILES
+        from rdkit import Chem, RDLogger
+
+        RDLogger.DisableLog("rdApp.*")
+        for i in missing:
+            mol = Chem.MolFromSmiles(smiles[i])
+            if mol is not None:
+                rows[i] = index.get(Chem.MolToSmiles(mol), -1)
+    return rows
 
 
-def load_features(smiles, rows, library, featurizer, n_jobs=1):
+def load_features(smiles, rows, library, featurizer, n_jobs=None):
     """Feature rows for ``smiles``: from the library where possible, featurized otherwise."""
     import scipy.sparse as sp
 
@@ -242,8 +254,19 @@ def load_features(smiles, rows, library, featurizer, n_jobs=1):
         X_lib = library.matrix(featurizer.name, rows[found]).astype(np.float32)
     if not missing:
         return X_lib
-    echo(f"featurizing {len(missing):,} molecules that are not in the library", "run")
-    X_new = featurizer.transform_raw(missing)
+    from xai4chem.library import _featurize_chunk, _imap, default_n_jobs
+
+    n_jobs = n_jobs or default_n_jobs()
+    echo(f"featurizing {len(missing):,} molecules that are not in the library · {n_jobs} workers", "run")
+    chunks = [missing[i : i + 5000] for i in range(0, len(missing), 5000)]
+    cfg = featurizer.to_config()
+    parts, done = [], 0
+    with sweep_progress("featurizing", len(missing)) as tick:
+        for block in _imap(_featurize_chunk, ((cfg, c) for c in chunks), n_jobs if len(missing) > 20000 else 1):
+            parts.append(block)
+            done += len(block)
+            tick(done)
+    X_new = np.vstack(parts)
     order = np.concatenate([np.where(found)[0], np.where(~found)[0]])
     inverse_order = np.empty_like(order)
     inverse_order[order] = np.arange(len(order))
