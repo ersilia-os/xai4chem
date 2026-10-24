@@ -35,7 +35,7 @@ pip install git+https://github.com/ersilia-os/xai4chem.git
 ```bash
 xai4chem setup -f morgan -f accfg                # once: library features, panel, Morgan bit names
 xai4chem library -o erl0_smiles.csv              # score this file with your teacher → soft.csv
-xai4chem fit -s soft.csv -m models/try --quick   # ~40 s: a first look (fewer rows and trees)
+xai4chem fit -s soft.csv -m models/try --quick   # ~15 s: a first look (fewer rows and trees)
 xai4chem fit -s soft.csv -m models/my_model      # S → explanations → HTML report (~3 min)
 xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
 xai4chem explain -m models/my_model -i molecules.csv -o explanations/ --open

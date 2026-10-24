@@ -26,6 +26,9 @@ Notes:
 - The validation split is a plain `DMatrix`. A `QuantileDMatrix` eval set made each round 20× slower in
   XGBoost 2.0, because its predictions are not cached.
 
+With `--quick` (200k soft labels, 500 trees, 2,000 panel molecules), a Morgan fit takes 16 s. With the hard
+head it takes 35 s, at R² 0.891 instead of 0.934.
+
 ## Fidelity to the teacher (held-out library molecules)
 
 | Featurizer | R² | Spearman ρ |
