@@ -108,7 +108,7 @@ sets it *in that molecule*. For global summaries, `setup` builds a **bit diction
 | Morgan counts | Olinda's `erl0_qmfp_r3.h5`, used in place (not copied) | 2.9 GB |
 | `accfg.h5` | AccFG counts, uint8 | 0.7 GB |
 | `datamol.h5` | datamol descriptors, float32 | 0.1 GB |
-| `panel.npy` | 50,000 random library rows for global explanations | — |
+| `panel.npy` | 50,000 random library rows; global explanations use the first 10,000 by default (`--explain-rows`) | — |
 | `bit_dictionary.json` | Morgan bit names and collision rates | ~2 MB |
 | `morgan_bits_*.npy` | Binary Morgan fingerprints as CSR index arrays, for the applicability search | 0.2 GB |
 
