@@ -221,10 +221,10 @@ class XAIModel(object):
         return out
 
     def _library(self):
-        from xai4chem.library import ReferenceLibrary
+        from xai4chem.library import library_for_model
 
         try:
-            return ReferenceLibrary(self.manifest["library"]["dir"])
+            return library_for_model(self.manifest)
         except (FileNotFoundError, KeyError, OSError):
             return None
 

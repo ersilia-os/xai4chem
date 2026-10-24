@@ -37,7 +37,7 @@ from xai4chem.console import (
 from xai4chem.console import path as cpath
 from xai4chem.featurizers import featurizer_from_config
 from xai4chem.io import match_hard_columns, read_labels
-from xai4chem.library import ReferenceLibrary
+from xai4chem.library import library_for_model
 from xai4chem.log import logger
 from xai4chem.run import (
     H_NAME,
@@ -147,7 +147,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
     set_active_color(color)
     manifest = read_manifest(model_dir)
     featurizer = featurizer_from_config(manifest["featurizer"])
-    library = ReferenceLibrary(library_dir or manifest["library"]["dir"])
+    library = library_for_model(manifest, library_dir)
     smiles, Y = read_labels(hard_labels, smiles_col=smiles_col, label_cols=label_cols, flag="--hard-smiles-column")
     by_name = {c["name"]: c for c in manifest["columns"]}
     mapping = match_hard_columns(list(by_name), list(Y.columns), strict=False)

@@ -20,7 +20,7 @@ from rich.markup import escape
 
 from xai4chem.console import STEP_COLORS, LiveTable, elapsed, rule, set_active_color, summary_panel
 from xai4chem.console import path as cpath
-from xai4chem.library import ReferenceLibrary
+from xai4chem.library import library_for_model
 from xai4chem.model import XAIModel
 from xai4chem.run import EXPLAIN_DIRNAME, FIDELITY_NAME, write_json
 from xai4chem.similarity import nearest
@@ -107,7 +107,7 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
     color = STEP_COLORS["explain-global"]
     set_active_color(color)
     model = XAIModel(model_dir)
-    library = ReferenceLibrary(library_dir or model.manifest["library"]["dir"])
+    library = library_for_model(model.manifest, library_dir)
     rows = library.panel()
     if max_rows:
         rows = rows[:max_rows]

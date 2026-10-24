@@ -89,11 +89,12 @@ def _download(url, dest):
         raise
 
 
-def locate_ersilia_library(download=True):
+def locate_ersilia_library(download=True, quiet=False):
     """Path to ``erl0_qmfp_r3.h5``: Olinda's copy if there is one, else downloaded once into ~/.xai4chem."""
     for candidate in (OLINDA_HOME / ERSILIA_LIBRARY_FILENAME, home_dir() / ERSILIA_LIBRARY_FILENAME):
         if candidate.exists():
-            echo(f"Ersilia reference library found · [dim]{cpath(candidate)}[/]", "info")
+            if not quiet:
+                echo(f"Ersilia reference library found · [dim]{cpath(candidate)}[/]", "info")
             return candidate
     if not download:
         raise FileNotFoundError(f"{ERSILIA_LIBRARY_FILENAME} not found in {OLINDA_HOME} or {home_dir()}")
@@ -240,6 +241,12 @@ def setup_library(
     n_jobs = n_jobs or default_n_jobs()
     manifest_path = library_dir / LIBRARY_JSON
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
+    if manifest is not None:
+        # Libraries written by earlier versions used absolute paths; make them portable on the way through
+        entries = [manifest["smiles"], *manifest["features"].values()]
+        for entry in entries:
+            entry["file"] = _portable(resolve_file(entry["file"], library_dir), library_dir)
+        _write_manifest(library_dir, manifest)
 
     wanted = "ersilia" if source == "ersilia" else str(Path(source).resolve())
     if manifest is not None and not force and manifest.get("source", wanted) != wanted:
@@ -258,9 +265,13 @@ def setup_library(
             manifest = {
                 "name": ERSILIA_LIBRARY_NAME,
                 "n_molecules": int(n),
-                "smiles": {"file": str(h5), "dataset": "input"},
+                "smiles": {"file": _portable(h5, library_dir), "dataset": "input"},
                 "features": {
-                    "morgan": {"file": str(h5), "dataset": "data", "config": get_featurizer("morgan").to_config()}
+                    "morgan": {
+                        "file": _portable(h5, library_dir),
+                        "dataset": "data",
+                        "config": get_featurizer("morgan").to_config(),
+                    }
                 },
             }
         else:
@@ -275,7 +286,7 @@ def setup_library(
             manifest = {
                 "name": Path(source).stem,
                 "n_molecules": len(smiles),
-                "smiles": {"file": str(library_dir / "smiles.h5"), "dataset": "input"},
+                "smiles": {"file": "smiles.h5", "dataset": "input"},
                 "features": {},
             }
         manifest["schema"] = SCHEMA
@@ -306,7 +317,7 @@ def setup_library(
         echo(f"featurizing {len(smiles):,} molecules with [bold]{name}[/] · {n_jobs} workers", "run")
         out = library_dir / f"{name}.h5"
         write_matrix(out, featurizer, smiles, n_jobs=n_jobs)
-        manifest["features"][name] = {"file": str(out), "dataset": "X", "config": featurizer.to_config()}
+        manifest["features"][name] = {"file": out.name, "dataset": "X", "config": featurizer.to_config()}
         _write_manifest(library_dir, manifest)
         success(f"{name} → [dim]{cpath(out)}[/] · {filesize(out.stat().st_size)}")
 
@@ -323,6 +334,32 @@ def setup_library(
         ReferenceLibrary(library_dir).morgan_bits()  # re-read: the manifest has grown since
         success("binary fingerprints cached for nearest-neighbour search")
     return library_dir
+
+
+def _portable(path, library_dir):
+    """How a file is recorded in ``library.json`` so the library directory can be moved or shared.
+
+    Files inside the directory are stored by relative path. Olinda's reference file is stored by name and
+    found again on whichever machine reads the library (see :func:`resolve_file`).
+    """
+    path, library_dir = Path(path), Path(library_dir)
+    try:
+        return str(path.resolve().relative_to(library_dir.resolve()))
+    except ValueError:
+        return path.name if path.name == ERSILIA_LIBRARY_FILENAME else str(path)
+
+
+def resolve_file(entry, library_dir):
+    """The absolute path of a ``library.json`` file entry (relative, Olinda's file by name, or absolute)."""
+    path = Path(entry)
+    if path.is_absolute() and path.exists():
+        return path
+    local = Path(library_dir) / path
+    if local.exists():
+        return local
+    if path.name == ERSILIA_LIBRARY_FILENAME:
+        return locate_ersilia_library(download=False, quiet=True)
+    raise FileNotFoundError(f"{entry} (listed in {Path(library_dir) / LIBRARY_JSON}) was not found.")
 
 
 def _write_manifest(library_dir, manifest):
@@ -397,7 +434,7 @@ class ReferenceLibrary(object):
         """The library SMILES, in row order (loaded once, on first access)."""
         if self._smiles is None:
             src = self.manifest["smiles"]
-            with h5py.File(src["file"], "r") as f:
+            with h5py.File(resolve_file(src["file"], self.dir), "r") as f:
                 raw = f[src["dataset"]][:]
             self._smiles = [s.decode() if isinstance(s, bytes) else str(s) for s in raw]
         return self._smiles
@@ -437,7 +474,7 @@ class ReferenceLibrary(object):
     def matrix(self, name, rows=None):
         """Raw feature rows, in the order given by ``rows`` (all rows if ``None``)."""
         src = self._source(name)
-        with h5py.File(src["file"], "r") as f:
+        with h5py.File(resolve_file(src["file"], self.dir), "r") as f:
             ds = f[src["dataset"]]
             if rows is None:
                 return ds[:]
@@ -474,7 +511,7 @@ class ReferenceLibrary(object):
         import scipy.sparse as sp
 
         src = self._source(name)
-        with h5py.File(src["file"], "r") as f:
+        with h5py.File(resolve_file(src["file"], self.dir), "r") as f:
             ds = f[src["dataset"]]
             n = ds.shape[0]
             rows = np.arange(n) if rows is None else np.asarray(rows)
@@ -524,3 +561,27 @@ class ReferenceLibrary(object):
     def panel(self):
         """Row indices of the explanation panel."""
         return np.load(self.dir / PANEL_NAME)
+
+
+def library_for_model(manifest, library_dir=None):
+    """The reference library a model was trained against.
+
+    Tries an explicit ``library_dir``, then the directory recorded at training, then the default location,
+    and accepts the first whose name and size match the model's record. A library copied to another
+    machine (for example through eosvc) is therefore found without retraining the model.
+    """
+    record = manifest["library"]
+    tried = []
+    for candidate in (library_dir, record.get("dir"), default_library_dir()):
+        if candidate is None or str(candidate) in tried:
+            continue
+        tried.append(str(candidate))
+        if not (Path(candidate) / LIBRARY_JSON).exists():
+            continue
+        library = ReferenceLibrary(candidate)
+        if library.name == record["name"] and len(library) == int(record["n_molecules"]):
+            return library
+    raise FileNotFoundError(
+        f"The reference library this model was trained on ({record['name']}, {int(record['n_molecules']):,} molecules) "
+        f"was not found in {', '.join(tried)}. Pass --library-dir, or run `xai4chem setup`."
+    )

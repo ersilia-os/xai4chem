@@ -381,3 +381,20 @@ def test_friendly_refusals(library, tmp_path):
     fails(
         ["predict", "-m", tmp_path / "nope", "-S", "CCO", "-i", root / "soft.csv", "-o", tmp_path / "y.csv"], "not both"
     )
+
+
+def test_library_is_relocatable(library, fitted, tmp_path):
+    """A library directory can be copied elsewhere (e.g. through eosvc) and models still find it."""
+    import shutil
+
+    from xai4chem.library import library_for_model
+
+    root, lib = library
+    _, model_dir, featurizer = fitted
+    moved = tmp_path / "moved_library"
+    shutil.copytree(lib, moved)
+    copy = ReferenceLibrary(moved)
+    np.testing.assert_array_equal(copy.matrix(featurizer, [3, 1]), ReferenceLibrary(lib).matrix(featurizer, [3, 1]))
+    manifest = XAIModel(model_dir).manifest
+    assert library_for_model(manifest, moved).dir == moved
+    run(["explain-global", "-m", model_dir, "--library-dir", moved, "--max-rows", 50])

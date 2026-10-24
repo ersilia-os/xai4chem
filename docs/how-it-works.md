@@ -113,5 +113,5 @@ sets it *in that molecule*. For global summaries, `setup` builds a **bit diction
 | `morgan_bits_*.npy` | Binary Morgan fingerprints as CSR index arrays, for the applicability search | 0.2 GB |
 
 These files are model-independent, so they are what an eosvc data folder (or a public bucket, like
-Olinda's) should hold. Anything model-specific lives in the model directory. A custom library is a CSV of
+Olinda's) should hold; see [eosvc.md](eosvc.md). Anything model-specific lives in the model directory. A custom library is a CSV of
 SMILES: `xai4chem setup --library my_library.csv -f all`.
