@@ -360,7 +360,7 @@ def sweep_progress(verb: str, total: int, *, width: int = 24):
 
         yield tick
     echo(
-        f"{verb} complete · [bold]{total:,}[/] molecules [dim]· {elapsed(time.time() - started)}[/]",
+        f"{verb} complete · [bold]{total:,}[/] molecule{'' if total == 1 else 's'} [dim]· {elapsed(time.time() - started)}[/]",
         "info",
         sub=True,
     )

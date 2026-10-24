@@ -148,7 +148,7 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
     manifest = read_manifest(model_dir)
     featurizer = featurizer_from_config(manifest["featurizer"])
     library = ReferenceLibrary(library_dir or manifest["library"]["dir"])
-    smiles, Y = read_labels(hard_labels, smiles_col=smiles_col, label_cols=label_cols)
+    smiles, Y = read_labels(hard_labels, smiles_col=smiles_col, label_cols=label_cols, flag="--hard-smiles-column")
     by_name = {c["name"]: c for c in manifest["columns"]}
     mapping = match_hard_columns(list(by_name), list(Y.columns), strict=False)
     ignored = [c for c in Y.columns if c not in mapping]
@@ -156,7 +156,10 @@ def learn_hard(hard_labels, model_dir, library_dir=None, seed=42, smiles_col=Non
         raise ValueError(f"No column of {hard_labels} matches a soft-label column ({list(by_name)}).")
     rule("xai4chem · learn-hard", style=color, right=f"{len(mapping)} column(s) · {len(smiles):,} labelled molecules")
     if ignored:
-        echo(f"ignoring columns that match no soft-label column: {', '.join(map(str, ignored))}", "warning")
+        echo(f"ignoring columns that match no soft-label column: {escape(', '.join(map(str, ignored)))}", "warning")
+    soft_only = [n for n in by_name if n not in mapping.values()]
+    if soft_only:
+        echo(f"no hard labels for {escape(', '.join(soft_only))}; they stay soft-only", "info")
     for hard, soft in mapping.items():
         if hard != soft:
             echo(f"hard column [bold]{escape(hard)}[/] refines soft column [bold]{escape(soft)}[/]", "info")

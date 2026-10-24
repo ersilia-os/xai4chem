@@ -76,7 +76,9 @@ def explain_molecules(
     mols = [Chem.MolFromSmiles(s) for s in smiles]
     invalid = [i for i, m in enumerate(mols) if m is None]
     if invalid:
-        echo(f"{len(invalid)} unparseable SMILES are reported with empty predictions", "warning")
+        bad = ", ".join(escape(ids[i]) for i in invalid[:5]) + (" …" if len(invalid) > 5 else "")
+        n = len(invalid)
+        echo(f"{n} unparseable SMILES ({bad}) {'is' if n == 1 else 'are'} reported with empty predictions", "warning")
 
     if domain is None:
         domain = len(smiles) <= DOMAIN_MAX
@@ -122,7 +124,7 @@ def explain_molecules(
             )
     if not quiet:
         _terminal_table(cols, pred, long_rows, sparse=model.featurizer.sparse)
-        if neighbours is not None:
+        if neighbours is not None and pred["library_T"].notna().any():
             T = pred["library_T"].dropna()
             far = int((T < DOMAIN_FAR).sum())
             note = f" · [yellow]{far} below {DOMAIN_FAR} (S extrapolates)[/]" if far else ""
@@ -215,11 +217,9 @@ def _card(model, cols, res, i, mol_id, smi, mol, x_row, labels, nb=None):
         r = res[col.name]
         hard = col.hard is not None
         stats = [H.stat("Prediction", f"{r['prob'][i]:.3f}", f"{col.name} · teacher scale")]
-        stats.append(
-            H.stat("S", f"{r['S'][i]:+.2f}", "teacher surrogate", tip="S on its own scale (logit for probabilities)")
-        )
+        stats.append(H.stat("S", f"{inverse(r['S'][i], col.transform):.3f}", "teacher surrogate"))
         if hard:
-            stats.append(H.stat("H_S", f"{r['HS'][i]:+.2f}", "experiments, on S's scale"))
+            stats.append(H.stat("H_S", f"{inverse(r['HS'][i], col.transform):.3f}", "experiments"))
             stats.append(
                 H.stat(
                     "a",

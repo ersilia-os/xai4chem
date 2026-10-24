@@ -77,14 +77,21 @@ def molecules_input(verb):
 
 def load_molecules(input_file, smiles_list, smiles_col=None, id_col=None):
     """(smiles, ids) from ``--input`` or ``--smiles``."""
-    if bool(input_file) == bool(smiles_list):
-        raise click.ClickException("Pass either --input or --smiles.")
+    if input_file and smiles_list:
+        raise click.ClickException("Pass --input or --smiles, not both.")
+    if not input_file and not smiles_list:
+        raise click.ClickException("Pass the molecules with --input (a file) or --smiles (repeatable).")
     if smiles_list:
         return list(smiles_list), None
-    from xai4chem.io import read_table, smiles_column
+    from xai4chem.io import check_smiles_column, read_table, smiles_column
 
     df = read_table(input_file)
-    smiles = df[smiles_column(df, smiles_col)].astype(str).tolist()
+    sc = smiles_column(df, smiles_col)
+    try:
+        check_smiles_column(df, sc, input_file)
+    except ValueError as exc:
+        raise click.ClickException(str(exc)) from exc
+    smiles = df[sc].astype(str).tolist()
     if id_col is not None and id_col not in df.columns:
         raise click.ClickException(f"--id-column {id_col!r} not found. Columns: {list(df.columns)}")
     return smiles, (df[id_col].astype(str).tolist() if id_col else None)

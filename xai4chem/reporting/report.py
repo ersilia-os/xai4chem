@@ -23,10 +23,7 @@ molecules held out from training. Explanations describe S, so they are as trustw
 panel, a fixed random subset of the library. <b>Direction</b> is the correlation between a feature's value and its
 SHAP value: positive means more of the feature raises the prediction. <b>When present</b> is the mean |SHAP| over the
 molecules that contain the feature, which ranks rare but strong features fairly.</p>
-<p>Morgan bits are folded, so one bit can be set by several substructures. Each bit is named by the substructure that
-most often sets it in the library, with that substructure's share; <b>collision</b> is the share of occurrences
-that come from other substructures.</p>
-<p>With hard labels, <b>H</b> is trained on the measurements with the same features, and carried onto S's scale by
+__MORGAN__<p>With hard labels, <b>H</b> is trained on the measurements with the same features, and carried onto S's scale by
 an isotonic map (<b>H_S</b>). The prediction is P = (1 − a)·S + a·H_S, where a = a_max · ramp(T) and T is the
 Tanimoto similarity (binary Morgan) to the nearest labelled molecule: the hard head only speaks near the labelled
 chemistry. a_max is earned from how well H_S reproduces the teacher on held-out library molecules. Because a is
@@ -111,6 +108,12 @@ def _substructure_rows(table, bit_dictionary):
         return frags[0]["radius"] if frags else 0
 
     return table[[radius(f) >= 1 for f in table["feature"]]].reset_index(drop=True)
+
+
+MORGAN_NOTE = """<p>Morgan bits are folded, so one bit can be set by several substructures. Each bit is named by the
+substructure that most often sets it in the library, with that substructure's share; <b>collision</b> is the share of
+occurrences that come from other substructures.</p>
+"""
 
 
 def write_report(model_dir, output, open_browser=False):
@@ -250,7 +253,7 @@ def write_report(model_dir, output, open_browser=False):
         "xai4chem",
         f"{H.esc(model_dir.name)} · model <em>report</em>",
         lede,
-        METHODS + "".join(body),
+        METHODS.replace("__MORGAN__", MORGAN_NOTE if featurizer == "morgan" else "") + "".join(body),
     )
     output.write_text(page)
     summary_panel(

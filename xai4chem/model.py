@@ -315,6 +315,7 @@ class XAIModel(object):
                     df[f"{col.name}_T"] = r["T"]
                     df[f"{col.name}_a"] = r["a"]
         df.loc[~res["_valid"], df.columns[1:]] = np.nan
+        df.insert(1, "valid", res["_valid"])
         return df
 
     def library_neighbours(self, smiles):

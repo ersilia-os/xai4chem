@@ -24,6 +24,25 @@ def _hard_metrics(y, pred):
     return {"spearman": safe_spearman(y, pred), "n": int(len(y))}
 
 
+def _training_smiles(model, kind):
+    """SMILES the model was trained on: soft-labelled molecules, or the hard heads' labelled sets."""
+    import h5py
+
+    from xai4chem.run import TARGETS_NAME
+
+    if kind == "hard":
+        return {s for c in model.columns if c.hard is not None for s in c.hard.labelled_smiles}
+    path = model.dir / TARGETS_NAME
+    library = model._library()
+    if not path.exists() or library is None:
+        return set()
+    with h5py.File(path, "r") as f:
+        rows = f["rows"][:]
+        extra = [s.decode() if isinstance(s, bytes) else s for s in f["extra_smiles"][:]] if "extra_smiles" in f else []
+    lib = library.smiles
+    return {lib[r] for r in rows if r >= 0} | set(extra)
+
+
 def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
     from rich import box
     from rich.table import Table
@@ -56,6 +75,12 @@ def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
         if unknown:
             echo(f"skipping columns the model does not have: {unknown}", "warning")
         echo(f"scoring {len(smiles):,} molecules from [dim]{cpath(path)}[/]", "run")
+        seen = _training_smiles(model, kind)
+        if seen:
+            overlap = sum(s in seen for s in smiles)
+            if overlap:
+                what = "soft-labelled training molecules" if kind == "soft" else "labelled molecules of the hard head"
+                echo(f"{overlap:,}/{len(smiles):,} of these are {what}: metrics on them are optimistic", "warning")
         res = model.scores(smiles, columns=sorted(set(mapping.values())))
         valid = res.pop("_valid")
         if (~valid).any():

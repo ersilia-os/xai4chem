@@ -67,7 +67,10 @@ def write_json(path, data):
 def read_manifest(model_dir):
     path = Path(model_dir) / MANIFEST_NAME
     if not path.exists():
-        raise FileNotFoundError(f"{model_dir} is not an xai4chem model directory (no {MANIFEST_NAME}).")
+        hint = "it does not exist" if not Path(model_dir).exists() else f"it has no {MANIFEST_NAME}"
+        raise FileNotFoundError(
+            f"{model_dir} is not an xai4chem model ({hint}). Train one with `xai4chem fit -s soft.csv -m {model_dir}`."
+        )
     return read_json(path)
 
 

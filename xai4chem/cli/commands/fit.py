@@ -58,6 +58,28 @@ def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, r
         if not force:
             raise click.ClickException(f"{model_dir} already holds a model. Pass --force to overwrite it.")
         shutil.rmtree(model_dir)
+    if hard_labels:
+        # Fail on a column mismatch now, not after minutes of learn-soft
+        from xai4chem.io import match_hard_columns, read_labels
+
+        _, soft_y = read_labels(
+            kwargs["soft_labels"],
+            smiles_col=kwargs["soft_smiles_column"],
+            label_cols=options.split(kwargs["soft_label_columns"]),
+            flag="--soft-smiles-column",
+        )
+        _, hard_y = read_labels(
+            hard_labels,
+            smiles_col=hard_smiles_column,
+            label_cols=options.split(hard_label_columns),
+            flag="--hard-smiles-column",
+        )
+        if not match_hard_columns([str(c) for c in soft_y.columns], [str(c) for c in hard_y.columns], strict=False):
+            raise click.ClickException(
+                f"No column of {hard_labels} ({', '.join(map(str, hard_y.columns))}) matches a soft-label column "
+                f"({', '.join(map(str, soft_y.columns))}). Names must match exactly (case included) or as a prefix; "
+                "--hard-label-columns selects columns."
+            )
     rule("xai4chem · fit", style=STEP_COLORS["fit"], right=cpath(model_dir))
     pipeline = (
         ["learn-soft"] + (["learn-hard"] if hard_labels else []) + ["explain-global"] + (["report"] if report else [])

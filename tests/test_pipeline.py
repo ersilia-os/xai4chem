@@ -110,7 +110,7 @@ def test_predict_matches_explain(fitted):
     pred = model.predict(QUERIES + ["not a smiles"], details=True)
     for col in model.columns:
         np.testing.assert_allclose(pred[col.name].to_numpy()[:3], res[col.name]["prob"], atol=1e-5)
-    assert pred.iloc[3, 1:].isna().all()
+    assert not pred["valid"].iloc[3] and pred.iloc[3, 2:].isna().all()
 
 
 def test_gate_opens_on_labelled_molecules(fitted):
@@ -347,3 +347,37 @@ def test_empty_teacher_column_is_skipped(library, tmp_path):
     assert model.column("activity").hard is not None
     nb = model.library_neighbours(QUERIES[:1])
     assert np.isfinite(nb["teacher"]["activity"][0])
+
+
+def fails(args, *needles):
+    result = CliRunner().invoke(create_cli(), [str(a) for a in args])
+    assert result.exit_code != 0, result.output
+    text = " ".join(result.output.replace("│", " ").split())  # the error panel wraps and boxes lines
+    for needle in needles:
+        assert needle in text, text
+    return result
+
+
+def test_friendly_refusals(library, tmp_path):
+    root, lib = library
+    soft = pd.read_csv(root / "soft.csv")
+    soft.assign(smiles=[f"CMP{i}" for i in range(len(soft))]).rename(columns={"smiles": "compound_id"}).to_csv(
+        tmp_path / "no_smiles.csv", index=False
+    )
+    fails(
+        ["fit", "-s", tmp_path / "no_smiles.csv", "--library-dir", lib, "-m", tmp_path / "a"],
+        "does not look like SMILES",
+    )
+    pd.read_csv(root / "hard.csv").rename(columns={"activity": "Activity"}).to_csv(
+        tmp_path / "hard_bad.csv", index=False
+    )
+    fails(
+        ["fit", "-s", root / "soft.csv", "-h", tmp_path / "hard_bad.csv", "--library-dir", lib, "-m", tmp_path / "b"],
+        "matches a soft-label column",
+    )
+    assert not (tmp_path / "b" / "manifest.json").exists()  # refused before any training
+    fails(["setup", "--library", tmp_path / "no_smiles.csv", "--library-dir", lib], "already holds the library")
+    fails(["explain", "-m", tmp_path / "nope", "-S", "CCO", "-o", tmp_path / "x"], "Train one with")
+    fails(
+        ["predict", "-m", tmp_path / "nope", "-S", "CCO", "-i", root / "soft.csv", "-o", tmp_path / "y.csv"], "not both"
+    )

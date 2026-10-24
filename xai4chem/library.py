@@ -241,6 +241,16 @@ def setup_library(
     manifest_path = library_dir / LIBRARY_JSON
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
 
+    wanted = "ersilia" if source == "ersilia" else str(Path(source).resolve())
+    if manifest is not None and not force and manifest.get("source", wanted) != wanted:
+        raise ValueError(
+            f"{library_dir} already holds the library built from {manifest.get('source')}. Pass --force to rebuild "
+            f"it from {source}, or --library-dir to keep both."
+        )
+    if manifest is not None and not force and (library_dir / PANEL_NAME).exists():
+        existing = len(np.load(library_dir / PANEL_NAME))
+        if existing != min(panel_size, int(manifest["n_molecules"])):
+            echo(f"keeping the existing panel of {existing:,} molecules (--force rebuilds it)", "info")
     if manifest is None or force:
         if source == "ersilia":
             h5 = locate_ersilia_library()
@@ -269,6 +279,7 @@ def setup_library(
                 "features": {},
             }
         manifest["schema"] = SCHEMA
+        manifest["source"] = wanted
         manifest["created"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
         _write_manifest(library_dir, manifest)
         success(

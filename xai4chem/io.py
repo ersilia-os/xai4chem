@@ -40,17 +40,35 @@ def smiles_column(df, name=None):
     return df.columns[0]
 
 
+def check_smiles_column(df, column, path, flag="--smiles-column"):
+    """Refuse a "SMILES" column that is not SMILES (e.g. an id column picked as the first column)."""
+    from rdkit import Chem, RDLogger
+
+    RDLogger.DisableLog("rdApp.*")
+    values = df[column].dropna().astype(str)
+    sample = values.sample(min(len(values), 500), random_state=0) if len(values) else values
+    ok = sum(Chem.MolFromSmiles(v) is not None for v in sample)
+    if len(sample) and ok / len(sample) < 0.5:
+        raise ValueError(
+            f"Column {column!r} of {path} does not look like SMILES ({ok}/{len(sample)} parse). Name a `smiles` or "
+            f"`input` column, or pass {flag}. Columns: {list(df.columns)}"
+        )
+
+
 def read_smiles(path, column=None):
     df = read_table(path)
-    return df[smiles_column(df, column)].astype(str).tolist()
+    sc = smiles_column(df, column)
+    check_smiles_column(df, sc, path)
+    return df[sc].astype(str).tolist()
 
 
-def read_labels(path, smiles_col=None, label_cols=None):
+def read_labels(path, smiles_col=None, label_cols=None, flag="--smiles-column"):
     """A labels table → (SMILES list, DataFrame of numeric label columns)."""
     import pandas as pd
 
     df = read_table(path)
     sc = smiles_column(df, smiles_col)
+    check_smiles_column(df, sc, path, flag)
     if label_cols:
         missing = [c for c in label_cols if c not in df.columns]
         if missing:

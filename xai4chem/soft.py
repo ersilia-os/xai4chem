@@ -327,7 +327,7 @@ def learn_soft(
         shutil.rmtree(stale)
     library = ReferenceLibrary(library_dir)
     featurizer = library.featurizer(featurizer_name)
-    smiles, Y = read_labels(soft_labels, smiles_col=smiles_col, label_cols=label_cols)
+    smiles, Y = read_labels(soft_labels, smiles_col=smiles_col, label_cols=label_cols, flag="--soft-smiles-column")
     rule(
         "xai4chem · learn-soft",
         style=color,
