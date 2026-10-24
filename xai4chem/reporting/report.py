@@ -52,6 +52,7 @@ def _direction_badge(d):
 
 def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
     rows = []
+    counts = featurizer_name != "datamol"
     vmax = float(df["mean_abs_shap"].head(TOP).max()) or 1.0
     for _, r in df.head(TOP).iterrows():
         drawing = ""
@@ -68,16 +69,17 @@ def _top_table(df, featurizer_name, bit_dictionary=None, smarts=None):
             H.esc(r["label"]),
             f'<span class="ibar" style="width:{60 * r["mean_abs_shap"] / vmax:.0f}px"></span> {_f(r["mean_abs_shap"])}',
             _direction_badge(r["direction"]),
-            _f(r["frequency"], "{:.1%}"),
-            _f(r["mean_abs_shap_when_present"]),
         ]
+        if counts:
+            cells += [_f(r["frequency"], "{:.1%}"), _f(r["mean_abs_shap_when_present"])]
         if "collision" in df.columns:
             cells.append(_f(r["collision"], "{:.0%}"))
         rows.append(cells)
-    headers = ["", "Feature", "Importance", "Direction", "Frequency", "When present"]
+    # Presence only means something for count features; descriptors are (almost) never zero
+    headers = ["", "Feature", "Importance", "Direction"] + (["Frequency", "When present"] if counts else [])
     if "collision" in df.columns:
         headers.append("Collision")
-    return H.table(headers, rows, numeric=(2, 4, 5, 6))
+    return H.table(headers, rows, numeric=(2, 4, 5, 6) if counts else (2,))
 
 
 def _substructure_rows(table, bit_dictionary):

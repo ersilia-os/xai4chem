@@ -32,6 +32,10 @@ Notes:
 |---|---|---|
 | Morgan | 0.934 | 0.970 |
 | AccFG | 0.842 | 0.921 |
+| datamol | 0.998 | 1.000 |
+
+The datamol figure is not a fair comparison: datamol's descriptor set includes QED itself, so S simply reads
+it off. For a real teacher, datamol explanations name the physicochemical properties a model leans on.
 
 Fidelity keeps rising slowly with more trees. On 400k Morgan rows, R² was 0.924 at 2,000 rounds, 0.936 at
 4,000 and 0.941 at 6,000. Prediction and TreeSHAP cost grow linearly with trees, so 2,000 is the default;
