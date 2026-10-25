@@ -35,6 +35,11 @@ One row per feature, sorted by importance:
 | `direction` | Correlation between the feature's value and its SHAP value; positive means "more raises the prediction" |
 | `collision` | Morgan only: share of the bit's occurrences that are not its named substructure |
 
+`chemotypes.csv` groups the explanation panel by Bemis–Murcko scaffold. It covers the most common scaffolds
+(at least 8 molecules). For each it gives the size, the mean teacher value and the mean S value (teacher
+scale, over the same molecules), and the *distinctive drivers*: the features whose mean |SHAP| within the
+scaffold most exceeds their panel-wide importance.
+
 ## Molecule explanations (`xai4chem explain -o out/`)
 
 - `predictions.csv` has one row per molecule. Per column:

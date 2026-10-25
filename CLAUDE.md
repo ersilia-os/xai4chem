@@ -32,9 +32,12 @@ This guide covers what is non-obvious about working here. The Ersilia house rule
 | `xai4chem/featurizers/` | morgan (Olinda-identical), accfg, datamol; one shared interface (see its `__init__`) |
 | `xai4chem/library.py` | reference library: setup, `library.json`, row-aligned matrices, CSR reads, bit dictionary |
 | `xai4chem/soft.py` / `hard.py` | learn-soft and learn-hard |
+| `xai4chem/tune.py` | optional Optuna search (`--tune`) on a subsample |
+| `xai4chem/io.py` | reading tables, SMILES-column detection and validation, hard→soft column matching |
+| `xai4chem/info.py` / `validate.py` | the `info` and `validate` commands |
 | `xai4chem/model.py` | `XAIModel`: loading, `explain`, `scores`, `predict`, golden vectors |
 | `xai4chem/similarity.py` | sparse-matrix Tanimoto nearest neighbours |
-| `xai4chem/reporting/` | global explanations, molecule gallery, model report, stylia figures, RDKit drawings, HTML |
+| `xai4chem/reporting/` | global explanations (with chemotypes), molecule gallery, `compare`, model report, stylia figures, RDKit drawings, HTML |
 | `xai4chem/console.py` | user-facing output (ported from Olinda) |
 | `xai4chem/log.py` | the loguru logger (named `log`, not `logging`, so it never shadows the stdlib) |
 | `xai4chem/tools/accfg/` | vendored AccFG, excluded from ruff; leave it as published |
@@ -103,7 +106,12 @@ piped. Never print one line per chunk.
 - `~/.xai4chem/library/` is model-independent and built once by `setup`:
   - The Morgan matrix is Olinda's `erl0_qmfp_r3.h5`, referenced in place by `library.json`.
   - Never copy or recompute it for the Ersilia library.
-- `data/` is gitignored and reserved for eosvc. Never commit datasets, models or `.h5` files.
+- Library manifests are relocatable:
+  - `library.json` records files relative to the directory
+  - Olinda's file is recorded by name
+  - `library_for_model` finds a model's library by name and size
+- `data/` is gitignored and reserved for eosvc (`docs/eosvc.md`). Never commit datasets, models or `.h5`
+  files.
 - Models carry golden vectors, re-scored on load. That, not a version pin, is the evidence that an
   environment reproduces a model.
 
