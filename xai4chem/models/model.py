@@ -135,7 +135,18 @@ class XAIModel(object):
         return self.featurizer.sparse
 
     def column(self, name):
-        """The :class:`Column` called ``name``."""
+        """The teacher column called ``name``.
+
+        Parameters
+        ----------
+        name : str
+            A name from :attr:`column_names`.
+
+        Returns
+        -------
+        Column
+            Its S, training metadata and hard head (or None).
+        """
         for c in self.columns:
             if c.name == name:
                 return c
@@ -150,20 +161,45 @@ class XAIModel(object):
         return [c for c in self.columns if c.name in columns]
 
     def featurize(self, smiles):
-        """Raw features of ``smiles`` with the model's featurizer."""
+        """Raw features of ``smiles`` with the model's featurizer.
+
+        Parameters
+        ----------
+        smiles : sequence of str
+            Molecules; unparseable ones get a row of zeros.
+
+        Returns
+        -------
+        numpy.ndarray
+            One row per molecule, one column per feature.
+        """
         return self.featurizer.transform_raw(list(smiles))
 
     def _fingerprints(self, smiles, X):
         return binarize(X) if self.featurizer.name == "morgan" else fingerprints(smiles)
 
     def explain(self, smiles, X=None, columns=None):
-        """Predictions and attributions for every requested column.
+        """Predictions and exact attributions for every requested column, on the model's scale.
 
-        Returns ``{column_name: dict}`` with arrays over molecules: ``S``, ``phi_S``, ``base_S``, ``P``,
-        ``phi_P``, ``base_P`` and ``prob`` (P on the teacher's scale). Columns with a hard head also get
-        ``h``, ``phi_H``, ``base_H``, ``HS``, ``phi_HS``, ``base_HS``, ``T``, ``a``, ``nearest`` and
-        ``flat`` (molecules whose H attribution could not be rescaled). Dense attribution arrays cost
-        ``n × features`` floats, so explain hundreds or thousands of molecules at a time, not millions.
+        Attribution arrays are dense (``n × features``), so explain hundreds or thousands of molecules at a
+        time, not millions; :meth:`predict` skips attributions.
+
+        Parameters
+        ----------
+        smiles : sequence of str
+            Molecules to explain.
+        X : array-like, optional
+            Their features, if already computed with :meth:`featurize`.
+        columns : list of str, optional
+            Teacher columns to use (default: all).
+
+        Returns
+        -------
+        dict
+            ``{column_name: dict}`` of arrays over molecules: ``S``, ``phi_S``, ``base_S``, ``P``, ``phi_P``,
+            ``base_P`` and ``prob`` (P on the teacher's scale). Columns with a hard head also get ``h``,
+            ``phi_H``, ``base_H``, ``HS``, ``phi_HS``, ``base_HS``, ``T``, ``a``, ``nearest`` and ``flat``
+            (molecules whose H attribution could not be rescaled).
         """
         smiles = list(smiles)
         X = self.featurize(smiles) if X is None else X
@@ -236,11 +272,24 @@ class XAIModel(object):
             return None
 
     def features(self, smiles, fingerprints_too=False, display=SILENT):
-        """Features (and validity) for many molecules.
+        """Features and validity for many molecules.
 
-        Large inputs reuse the reference library: molecules found there (exact or canonical SMILES) get their
-        precomputed rows and only the rest are featurized. Returns ``(X, valid, fps)``; ``fps`` (binary Morgan,
-        for the gate) is ``None`` unless asked for.
+        Inputs of 50,000 molecules or more reuse the reference library: molecules found there (exact or
+        canonical SMILES) get their precomputed rows and only the rest are featurized.
+
+        Parameters
+        ----------
+        smiles : sequence of str
+            Molecules.
+        fingerprints_too : bool
+            Also return binary Morgan fingerprints (for the gate) when the library can provide them.
+        display : xai4chem.progress.Display
+            Where progress goes (silent by default).
+
+        Returns
+        -------
+        tuple
+            ``(X, valid, fps)``: the features, which SMILES parse, and the fingerprints or None.
         """
         from xai4chem.data.features import align_to_library, featurize, load_features
 
@@ -267,9 +316,23 @@ class XAIModel(object):
         return X, valid, fps
 
     def scores(self, smiles, columns=None, batch_size=BATCH, display=SILENT):
-        """S, P (and H_S, T, a) on the model's scale per column, without attributions.
+        """S and P (and H_S, T, a) per column on the model's scale, without attributions.
 
-        Also returns, under ``"_valid"``, which SMILES could be parsed.
+        Parameters
+        ----------
+        smiles : sequence of str
+            Molecules to score.
+        columns : list of str, optional
+            Teacher columns to use (default: all).
+        batch_size : int
+            Molecules scored at a time.
+        display : xai4chem.progress.Display
+            Where progress goes (silent by default).
+
+        Returns
+        -------
+        dict
+            ``{column_name: dict}`` of arrays over molecules, plus ``"_valid"``: which SMILES parse.
         """
         smiles = list(smiles)
         cols = self._select(columns)
@@ -291,10 +354,25 @@ class XAIModel(object):
         return out
 
     def predict(self, smiles, columns=None, details=False, batch_size=BATCH, display=SILENT):
-        """One row per molecule: P on the teacher's scale per column (NaN for unparseable SMILES).
+        """One row per molecule, with P on the teacher's scale per column; cheap enough for millions.
 
-        With ``details``, also S and H_S (on the teacher's scale), T and a. No attributions are computed,
-        so this path is cheap enough for millions of molecules.
+        Parameters
+        ----------
+        smiles : sequence of str
+            Molecules to score.
+        columns : list of str, optional
+            Teacher columns to use (default: all).
+        details : bool
+            Also give S and H_S (on the teacher's scale), T and ``a``.
+        batch_size : int
+            Molecules scored at a time.
+        display : xai4chem.progress.Display
+            Where progress goes (silent by default).
+
+        Returns
+        -------
+        pandas.DataFrame
+            ``smiles``, ``valid``, then the predictions (NaN for unparseable SMILES).
         """
         smiles = list(smiles)
         res = self.scores(smiles, columns=columns, batch_size=batch_size, display=display)
@@ -316,9 +394,18 @@ class XAIModel(object):
         """Each molecule's nearest neighbour in the reference library, and what the teacher said about it.
 
         This is the applicability domain of S: T close to 1 means S was trained on (nearly) this molecule;
-        below ~0.3 it is extrapolating. Returns ``None`` when the library or its Morgan matrix is missing,
-        else a dict with ``T``, ``row``, ``smiles`` and ``teacher`` (per column, on the teacher's scale;
-        NaN where the soft labels did not cover the neighbour).
+        below ~0.3 it is extrapolating.
+
+        Parameters
+        ----------
+        smiles : sequence of str
+            Molecules to look up.
+
+        Returns
+        -------
+        dict or None
+            ``T``, ``row``, ``smiles`` and ``teacher`` (per column, on the teacher's scale; NaN where the soft
+            labels did not cover the neighbour); None when the library or its Morgan matrix is missing.
         """
         import h5py
 

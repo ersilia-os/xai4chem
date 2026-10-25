@@ -27,7 +27,26 @@ def _plural(n, word):
 
 
 def setup(source=None, featurizers=("datamol",), library_dir=None, force=False, display=SILENT):
-    """Prepare a reference library (see :func:`xai4chem.data.build.setup_library`) and return it."""
+    """Download Ersilia's reference library, or build one from your own SMILES.
+
+    Parameters
+    ----------
+    source : str or Path, optional
+        ``None`` or ``"ersilia"`` for Ersilia's published library; a CSV of SMILES to build your own.
+    featurizers : sequence of str
+        Featurizers to get (``morgan``, ``accfg``, ``datamol``). Morgan is always included.
+    library_dir : str or Path, optional
+        Where the library lives (default ``~/.xai4chem/library``).
+    force : bool
+        Replace whatever library is already there.
+    display : xai4chem.progress.Display
+        Where progress goes; silent by default, ``ConsoleDisplay`` for the CLI's output.
+
+    Returns
+    -------
+    ReferenceLibrary
+        The library, ready to read.
+    """
     from xai4chem.data.build import setup_library
     from xai4chem.data.library import ReferenceLibrary
 
@@ -53,8 +72,38 @@ def fit(
 ):
     """Learn S from soft labels, optionally H from hard labels, explain the library panel and write the report.
 
-    Returns a dict with ``model_dir``, ``columns`` (per column: name, fidelity, and the hard head's held-out
-    metric and ``a_max`` when there is one), ``report`` (its path, or None) and ``elapsed`` seconds.
+    Parameters
+    ----------
+    soft_labels : str or Path
+        The teacher's outputs: a ``smiles`` (or ``input``) column plus one numeric column per output.
+    model_dir : str or Path
+        Where to write the model.
+    hard_labels : str or Path, optional
+        Measurements, in columns named like the soft-label columns (or as a prefix of them).
+    featurizer : str
+        ``datamol`` (descriptors), ``morgan`` (substructures) or ``accfg`` (functional groups).
+    library_dir : str or Path, optional
+        The reference library (default ``~/.xai4chem/library``).
+    force : bool
+        Overwrite an existing model in ``model_dir``.
+    seed : int
+        Seed for the validation splits and the golden molecules.
+    transform : str
+        Scale S learns on: ``auto`` (logit for probabilities), ``logit`` or ``identity``.
+    n_estimators : int, optional
+        Most boosting rounds for S (default 2,000, with early stopping).
+    panel_rows : int, optional
+        Library panel molecules explained globally (default 2,000).
+    report : bool
+        Write ``report.html``.
+    display : xai4chem.progress.Display
+        Where progress goes; silent by default, ``ConsoleDisplay`` for the CLI's output.
+
+    Returns
+    -------
+    dict
+        ``model_dir``; ``columns``, one global summary per column (fidelity, top features and, with a hard
+        head, its held-out metric, ``a_max`` and reach); ``report``, its path or None; ``elapsed`` seconds.
     """
     from xai4chem.data.features import align_to_library, load_features
     from xai4chem.data.io import match_hard_columns, read_labels
@@ -204,20 +253,13 @@ def _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns
     write_golden(model_dir)
 
 
-def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, display):
-    """H, its isotonic map onto S and the gate's labelled set, per matched column, in a live table."""
-    import pandas as pd
-    import scipy.sparse as sp
-
+def _hard_inputs(hard, hard_labels, mapping, by_name, feat, display):
+    """The matched columns, which labelled SMILES parse, and their features and fingerprints."""
     from xai4chem.data.features import featurize
     from xai4chem.data.similarity import binarize, fingerprints
-    from xai4chem.models import hard as hd
-    from xai4chem.models.model import valid_mask, write_golden
-    from xai4chem.models.surrogate import contributions, predict_margin
-    from xai4chem.run import H_NAME, H_TO_S_NAME, HARD_META_NAME, LABELLED_FP_NAME, LABELLED_NAME, hard_dir, write_json
+    from xai4chem.models.model import valid_mask
 
     smiles, Y = hard
-    by_name = {c["name"]: c for c in columns}
     mapping = {h: s for h, s in mapping.items() if s in by_name}
     ignored = [str(c) for c in Y.columns if str(c) not in mapping]
     if ignored:
@@ -232,8 +274,35 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
     if not valid.all():
         display.note(f"{int((~valid).sum()):,} unparseable SMILES in {Path(hard_labels).name} are left out", "warning")
     Xh_all = featurize(feat, smiles, display)
-    fps_all = binarize(Xh_all) if feat.name == "morgan" else fingerprints(smiles)
+    return mapping, valid, Xh_all, binarize(Xh_all) if feat.name == "morgan" else fingerprints(smiles)
 
+
+def _save_hard_head(hdir, booster, iso_map, labelled, fps, meta):
+    """Write a hard head; ``hard_meta.json`` goes last, because its presence marks a complete head."""
+    import scipy.sparse as sp
+
+    from xai4chem.run import H_NAME, H_TO_S_NAME, HARD_META_NAME, LABELLED_FP_NAME, LABELLED_NAME, write_json
+
+    hdir.mkdir(parents=True, exist_ok=True)
+    booster.save_model(str(hdir / H_NAME))
+    write_json(hdir / H_TO_S_NAME, iso_map)
+    labelled.to_csv(hdir / LABELLED_NAME, index=False)
+    sp.save_npz(hdir / LABELLED_FP_NAME, sp.csr_matrix(fps))
+    write_json(hdir / HARD_META_NAME, meta)
+
+
+def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, display):
+    """H, its isotonic map onto S and the gate's labelled set, per matched column, in a live table."""
+    import pandas as pd
+
+    from xai4chem.models import hard as hd
+    from xai4chem.models.model import write_golden
+    from xai4chem.models.surrogate import contributions, predict_margin
+    from xai4chem.run import hard_dir
+
+    smiles, Y = hard
+    by_name = {c["name"]: c for c in columns}
+    mapping, valid, Xh_all, fps_all = _hard_inputs(hard, hard_labels, mapping, by_name, feat, display)
     with display.table(list(mapping), "Learning H", ["Task", "Labels", "Held-out", "R² H_S", "a_max", "Time"]) as table:
         for hard_name, soft_name in mapping.items():
             table.start(hard_name)
@@ -265,12 +334,6 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
             iso_map, alignment_r2 = hd.fit_isotonic(predict_margin(booster, X[ok], feat.sparse), Z[ok, j])
             a_max = hd.blend_ceiling(alignment_r2)
 
-            hdir = hard_dir(model_dir, col["id"])
-            hdir.mkdir(parents=True, exist_ok=True)
-            booster.save_model(str(hdir / H_NAME))
-            write_json(hdir / H_TO_S_NAME, iso_map)
-            pd.DataFrame({"smiles": [smiles[i] for i in idx], "label": y}).to_csv(hdir / LABELLED_NAME, index=False)
-            sp.save_npz(hdir / LABELLED_FP_NAME, sp.csr_matrix(fh))
             meta = {
                 "name": soft_name,
                 "hard_column": hard_name,
@@ -288,7 +351,8 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 "a_ceiling": hd.A_CEILING,
                 "seed": seed,
             }
-            write_json(hdir / HARD_META_NAME, meta)  # written last: it marks a complete hard head
+            labelled = pd.DataFrame({"smiles": [smiles[i] for i in idx], "label": y})
+            _save_hard_head(hard_dir(model_dir, col["id"]), booster, iso_map, labelled, fh, meta)
             table.finish(
                 hard_name,
                 **{"R² H_S": f"{alignment_r2:.3f}", "a_max": f"{a_max:.2f}"},
@@ -316,15 +380,32 @@ def explain(model, smiles, output_dir="explanations", ids=None, domain=False, di
     """Predict and explain molecules; write ``predictions.csv``, ``attributions.csv`` and ``index.html``.
 
     With exactly two valid molecules, the gap between their predictions is also split into exact
-    per-feature differences. With ``domain``, each molecule's nearest library molecule (and the teacher's
-    value for it) is looked up, which loads the library's fingerprints.
+    per-feature differences.
 
-    Returns a dict with ``predictions`` and ``attributions`` (DataFrames), ``comparisons`` (one dict per
-    column, or empty), ``gallery`` (its path), ``domain`` (the median library similarity and the number of
-    molecules below 0.3, or None) and ``elapsed`` seconds.
+    Parameters
+    ----------
+    model : str, Path or XAIModel
+        A model directory written by :func:`fit`, or the model already loaded.
+    smiles : sequence of str
+        Molecules to explain; unparseable ones keep their row, with empty values.
+    output_dir : str or Path
+        Where to write the tables and the gallery.
+    ids : sequence of str, optional
+        A name per molecule (default ``mol_0000``, ``mol_0001``…).
+    domain : bool
+        Also look up each molecule's nearest library molecule and the teacher's value for it (loads the
+        library's fingerprints, a few seconds).
+    display : xai4chem.progress.Display
+        Where progress goes; silent by default, ``ConsoleDisplay`` for the CLI's output.
+
+    Returns
+    -------
+    dict
+        ``predictions`` and ``attributions`` (DataFrames); ``comparisons`` (one dict per column, or empty);
+        ``gallery`` (its path); ``cards`` (molecules drawn); ``domain`` (the median library similarity and the
+        count below 0.3, or None); ``elapsed`` seconds.
     """
     import pandas as pd
-    from rdkit import Chem
 
     from xai4chem.explain.tables import attribution_rows, compare_pair, prediction_rows
     from xai4chem.report import gallery as G
@@ -336,16 +417,7 @@ def explain(model, smiles, output_dir="explanations", ids=None, domain=False, di
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     cols, feat = model.columns, model.featurizer
-    mols = [Chem.MolFromSmiles(s) for s in smiles]
-    invalid = [ids[i] for i, m in enumerate(mols) if m is None]
-    if len(invalid) == len(smiles):
-        raise ValueError("None of the SMILES could be parsed; nothing to explain.")
-    if invalid:
-        shown = ", ".join(invalid[:5]) + (" …" if len(invalid) > 5 else "")
-        display.note(
-            f"{_plural(len(invalid), 'unparseable SMILES')} ({shown}) reported with empty predictions", "warning"
-        )
-
+    mols = _parse(smiles, ids, display)
     neighbours = None
     if domain:
         display.note("finding each molecule's nearest library molecule")
@@ -374,14 +446,7 @@ def explain(model, smiles, output_dir="explanations", ids=None, domain=False, di
                 comparisons = [(col, compare_pair(col, res[col.name], X, b_mols, feat), res[col.name]) for col in cols]
             tick(stop)
     pred = pd.concat(pred_parts, ignore_index=True)
-    summary = None
-    if neighbours is not None:
-        pred["library_T"] = neighbours["T"]
-        pred["library_nearest_smiles"] = neighbours["smiles"]
-        for name, values in neighbours["teacher"].items():
-            pred[f"{name}_library_teacher"] = values
-        T = pred["library_T"].dropna()
-        summary = {"median_T": float(T.median()), "far": int((T < G.DOMAIN_FAR).sum())} if len(T) else None
+    summary = _add_domain(pred, neighbours) if neighbours is not None else None
     attributions = pd.DataFrame(long_rows)
     pred.to_csv(output_dir / "predictions.csv", index=False)
     attributions.to_csv(output_dir / "attributions.csv", index=False)
@@ -398,6 +463,34 @@ def explain(model, smiles, output_dir="explanations", ids=None, domain=False, di
     }
 
 
+def _parse(smiles, ids, display):
+    """RDKit molecules (None where unparseable); refuses an input where nothing parses."""
+    from rdkit import Chem
+
+    mols = [Chem.MolFromSmiles(s) for s in smiles]
+    invalid = [ids[i] for i, m in enumerate(mols) if m is None]
+    if len(invalid) == len(smiles):
+        raise ValueError("None of the SMILES could be parsed; nothing to explain.")
+    if invalid:
+        shown = ", ".join(invalid[:5]) + (" …" if len(invalid) > 5 else "")
+        display.note(
+            f"{_plural(len(invalid), 'unparseable SMILES')} ({shown}) reported with empty predictions", "warning"
+        )
+    return mols
+
+
+def _add_domain(pred, neighbours):
+    """Add the applicability columns to ``pred``; return the median similarity and the count below 0.3."""
+    from xai4chem.report.gallery import DOMAIN_FAR
+
+    pred["library_T"] = neighbours["T"]
+    pred["library_nearest_smiles"] = neighbours["smiles"]
+    for name, values in neighbours["teacher"].items():
+        pred[f"{name}_library_teacher"] = values
+    T = pred["library_T"].dropna()
+    return {"median_T": float(T.median()), "far": int((T < DOMAIN_FAR).sum())} if len(T) else None
+
+
 def _neighbour(neighbours, k):
     if neighbours is None or not np.isfinite(neighbours["T"][k]):
         return None
@@ -412,7 +505,26 @@ def _neighbour(neighbours, k):
 
 
 def predict(model, smiles, output=None, details=False, display=SILENT):
-    """Score molecules without explanations (millions are fine); write ``output`` if given and return the table."""
+    """Score molecules without explanations; millions are fine.
+
+    Parameters
+    ----------
+    model : str, Path or XAIModel
+        A model directory written by :func:`fit`, or the model already loaded.
+    smiles : sequence of str
+        Molecules to score.
+    output : str or Path, optional
+        A CSV to write the table to.
+    details : bool
+        Also give S and, with a hard head, H_S, T and ``a`` per column.
+    display : xai4chem.progress.Display
+        Where progress goes; silent by default, ``ConsoleDisplay`` for the CLI's output.
+
+    Returns
+    -------
+    pandas.DataFrame
+        ``smiles``, ``valid``, then P per column on the teacher's scale (NaN for unparseable SMILES).
+    """
     model = _load(model)
     df = model.predict(list(smiles), details=details, display=display)
     if output is not None:

@@ -127,7 +127,20 @@ def _training_details(meta):
 
 
 def write_report(model_dir, output=None):
-    """Write the model report and return its path (default ``<model_dir>/report.html``)."""
+    """Write the model report from what ``fit`` saved in the model directory.
+
+    Parameters
+    ----------
+    model_dir : str or Path
+        A model directory written by ``xai4chem fit``.
+    output : str or Path, optional
+        Where to write the page (default ``<model_dir>/report.html``).
+
+    Returns
+    -------
+    Path
+        The page written.
+    """
     from xai4chem.featurizers import featurizer_from_config
 
     model_dir = Path(model_dir)
@@ -140,58 +153,9 @@ def write_report(model_dir, output=None):
     smarts = featurizer_from_config(manifest["featurizer"]).smarts() if featurizer == "accfg" else None
     body = []
     for col in manifest["columns"]:
-        cdir = column_dir(model_dir, col["id"])
-        exp = cdir / EXPLAIN_DIRNAME
-        s = read_json(exp / "summary.json")
-        meta = read_json(cdir / "soft_meta.json")
-        fid, hard = s["fidelity"], s.get("hard")
-        scale = " · logit scale" if col["transform"] == "logit" else ""
-        stats = [
-            H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules{scale}"),
-            H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),
-        ]
-        if hard:
-            ho = hard["heldout"]
-            key, value = ("Held-out AUROC", ho["auroc"]) if "auroc" in ho else ("Held-out ρ", ho["spearman"])
-            stats.append(H.stat(key, _f(value), f"H on {hard['n_labels']:,} labels"))
-            stats.append(
-                H.stat(
-                    "a_max", _f(hard["a_max"], "{:.2f}"), f"R² of H_S vs teacher {_f(hard['alignment_r2'], '{:.2f}')}"
-                )
-            )
-        top_s = pd.read_csv(exp / "global_s.csv")
-        figs = []
-        if (cdir / FIDELITY_NAME).exists():
-            data = np.load(cdir / FIDELITY_NAME)
-            figs.append(
-                H.figure(
-                    svg.density(data["teacher"], data["surrogate"], f"Teacher{scale}", f"Surrogate S{scale}"),
-                    "Teacher against S on held-out library molecules.",
-                )
-            )
-        figs.append(H.figure(_effects(exp / "plot_s.npz"), "Effect of the top features on panel molecules."))
-        content = [H.kpis(stats), f'<div class="figrow2" style="margin-top:14px">{"".join(figs)}</div>']
-        content.append(
-            '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
-            + _top_table(top_s, featurizer, bit_dictionary, smarts)
-        )
-        if featurizer == "morgan" and bit_dictionary is not None:
-            subs = _substructures(top_s, bit_dictionary)
-            if len(subs):
-                content.append(
-                    '<h3 style="margin-top:18px; font-size:13px">Top substructures</h3>'
-                    '<p class="faint" style="font-size:11.5px;margin:0 0 6px">Bits whose named environment spans at least '
-                    "one bond; single-atom bits mostly track molecular size and composition.</p>"
-                    + _top_table(subs, featurizer, bit_dictionary, smarts)
-                )
-        content.append(_training_details(meta))
-        body.append(
-            H.section(
-                f"{col['name']} · what the teacher has learned",
-                "".join(content),
-                hint=f"panel of {s['panel_size']:,} library molecules",
-            )
-        )
+        exp = column_dir(model_dir, col["id"]) / EXPLAIN_DIRNAME
+        hard = read_json(exp / "summary.json").get("hard")
+        body.append(_soft_section(model_dir, col, featurizer, bit_dictionary, smarts))
         if hard:
             body.append(_hard_section(col, hard, exp, featurizer, bit_dictionary, smarts))
     lede = (
@@ -210,6 +174,58 @@ def write_report(model_dir, output=None):
         )
     )
     return output
+
+
+def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
+    """What the teacher has learned, for one column: fidelity, figures, top features, training details."""
+    cdir = column_dir(model_dir, col["id"])
+    exp = cdir / EXPLAIN_DIRNAME
+    s = read_json(exp / "summary.json")
+    meta = read_json(cdir / "soft_meta.json")
+    fid, hard = s["fidelity"], s.get("hard")
+    scale = " · logit scale" if col["transform"] == "logit" else ""
+    stats = [
+        H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules{scale}"),
+        H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),
+    ]
+    if hard:
+        ho = hard["heldout"]
+        key, value = ("Held-out AUROC", ho["auroc"]) if "auroc" in ho else ("Held-out ρ", ho["spearman"])
+        stats.append(H.stat(key, _f(value), f"H on {hard['n_labels']:,} labels"))
+        stats.append(
+            H.stat("a_max", _f(hard["a_max"], "{:.2f}"), f"R² of H_S vs teacher {_f(hard['alignment_r2'], '{:.2f}')}")
+        )
+    top_s = pd.read_csv(exp / "global_s.csv")
+    figs = []
+    if (cdir / FIDELITY_NAME).exists():
+        data = np.load(cdir / FIDELITY_NAME)
+        figs.append(
+            H.figure(
+                svg.density(data["teacher"], data["surrogate"], f"Teacher{scale}", f"Surrogate S{scale}"),
+                "Teacher against S on held-out library molecules.",
+            )
+        )
+    figs.append(H.figure(_effects(exp / "plot_s.npz"), "Effect of the top features on panel molecules."))
+    content = [H.kpis(stats), f'<div class="figrow2" style="margin-top:14px">{"".join(figs)}</div>']
+    content.append(
+        '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
+        + _top_table(top_s, featurizer, bit_dictionary, smarts)
+    )
+    if featurizer == "morgan" and bit_dictionary is not None:
+        subs = _substructures(top_s, bit_dictionary)
+        if len(subs):
+            content.append(
+                '<h3 style="margin-top:18px; font-size:13px">Top substructures</h3>'
+                '<p class="faint" style="font-size:11.5px;margin:0 0 6px">Bits whose named environment spans at least '
+                "one bond; single-atom bits mostly track molecular size and composition.</p>"
+                + _top_table(subs, featurizer, bit_dictionary, smarts)
+            )
+    content.append(_training_details(meta))
+    return H.section(
+        f"{col['name']} · what the teacher has learned",
+        "".join(content),
+        hint=f"panel of {s['panel_size']:,} library molecules",
+    )
 
 
 def _hard_section(col, hard, exp, featurizer, bit_dictionary, smarts):

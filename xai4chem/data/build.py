@@ -102,6 +102,17 @@ def write_features(library_dir, featurizer, X):
     return {"file": name, "format": "dense", "dtype": "float32", "config": featurizer.to_config()}
 
 
+def _count_environments(mol, total):
+    """Add every atom environment of ``mol`` to the per-bit counters, named by its SMILES.
+
+    One SMILES per occurrence: caching by Morgan identifier is 7x faster but misnames ~1% of bits,
+    because distinct environments (e.g. ring sizes) can share an identifier.
+    """
+    for bit, occ in morgan_bit_info(mol).items():
+        for center, radius in occ:
+            total[bit][(radius, fragment_smiles(mol, center, radius))] += 1
+
+
 def compute_bit_dictionary(smiles, display=SILENT):
     """Name every Morgan bit by the substructures that set it, counted over ``smiles``."""
     from rdkit import Chem
@@ -111,11 +122,7 @@ def compute_bit_dictionary(smiles, display=SILENT):
         for i, smi in enumerate(smiles):
             mol = Chem.MolFromSmiles(smi)
             if mol is not None:
-                # One SMILES per occurrence: caching by Morgan identifier is 7x faster but misnames ~1% of
-                # bits, because distinct environments (e.g. ring sizes) can share an identifier
-                for bit, occ in morgan_bit_info(mol).items():
-                    for center, radius in occ:
-                        total[bit][(radius, fragment_smiles(mol, center, radius))] += 1
+                _count_environments(mol, total)
             if i % 500 == 0:
                 tick(i)
         tick(len(smiles))
@@ -229,7 +236,9 @@ def publish_manifest(library_dir):
     manifest = json.loads((library_dir / LIBRARY_JSON).read_text())
     files = [manifest["smiles"]["file"], PANEL_NAME, BIT_DICTIONARY_NAME]
     files += [e["file"] for e in manifest["features"].values()]
-    manifest["files"] = {f: {"bytes": (library_dir / f).stat().st_size, "sha256": _sha256(library_dir / f)} for f in files}
+    manifest["files"] = {
+        f: {"bytes": (library_dir / f).stat().st_size, "sha256": _sha256(library_dir / f)} for f in files
+    }
     write_manifest(library_dir, manifest)
     return manifest
 
@@ -273,7 +282,9 @@ def download_library(library_dir, featurizers, display=SILENT):
     if local is None:
         local = {k: v for k, v in remote.items() if k not in ("features", "files")}
         local["features"] = {}
-    wanted = [remote["smiles"]["file"], PANEL_NAME, BIT_DICTIONARY_NAME] + [remote["features"][n]["file"] for n in names]
+    wanted = [remote["smiles"]["file"], PANEL_NAME, BIT_DICTIONARY_NAME] + [
+        remote["features"][n]["file"] for n in names
+    ]
     todo = [f for f in wanted if not (library_dir / f).exists()]
     total = sum(remote["files"][f]["bytes"] for f in todo)
     if todo:
@@ -327,14 +338,26 @@ def setup_library(source=None, featurizers=("datamol",), library_dir=None, force
         smiles = ReferenceLibrary(library_dir).smiles
     else:
         smiles = _read_library_smiles(source, display)
-    return build_library(smiles, library_dir, manifest["name"] if manifest else Path(source).stem, featurizers, wanted, seed=seed, display=display)
+    return build_library(
+        smiles,
+        library_dir,
+        manifest["name"] if manifest else Path(source).stem,
+        featurizers,
+        wanted,
+        seed=seed,
+        display=display,
+    )
 
 
 def _clear(library_dir, manifest):
     """Remove the library's own files, and nothing else a user may keep in the same folder."""
     names = {LIBRARY_JSON, SMILES_NAME, PANEL_NAME, BIT_DICTIONARY_NAME, MORGAN_BITS_INDICES, MORGAN_BITS_INDPTR}
     names |= {f"{n}.h5" for n in FEATURIZERS}
-    names |= {Path(e["file"]).name for e in [manifest.get("smiles", {}), *manifest.get("features", {}).values()] if "file" in e}
+    names |= {
+        Path(e["file"]).name
+        for e in [manifest.get("smiles", {}), *manifest.get("features", {}).values()]
+        if "file" in e
+    }
     for name in names:
         (Path(library_dir) / name).unlink(missing_ok=True)
 

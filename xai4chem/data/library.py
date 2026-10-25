@@ -155,7 +155,20 @@ class ReferenceLibrary(object):
         return BitDictionary.load(self.dir / BIT_DICTIONARY_NAME)
 
     def matrix(self, name, rows=None):
-        """Raw feature rows as a dense array, in the order given by ``rows`` (all rows if ``None``)."""
+        """Raw feature rows as a dense array.
+
+        Parameters
+        ----------
+        name : str
+            A featurizer the library holds (see :attr:`featurizers`).
+        rows : array-like of int, optional
+            Library rows, in the order wanted; repeats are allowed (default: every row).
+
+        Returns
+        -------
+        numpy.ndarray
+            One row per requested library row, in the stored dtype.
+        """
         src = self._source(name)
         if src.get("format") == "csr":
             return self.csr(name, rows).toarray().astype(np.dtype(src.get("dtype", "uint8")))
@@ -172,11 +185,24 @@ class ReferenceLibrary(object):
             return ds[unique][inverse]
 
     def csr(self, name, rows=None, tick=None):
-        """Rows as float32 CSR, in the order given by ``rows`` (all rows if ``None``).
+        """Feature rows as float32 CSR.
 
-        For count featurizers (Morgan, AccFG), whose zeros mean "absent": XGBoost treats the implicit
-        zeros of a CSR matrix as missing, the same split for a count feature. ``tick(rows_done)`` reports
-        progress on large dense reads.
+        Meant for count featurizers (Morgan, AccFG), whose zeros mean "absent": XGBoost treats the implicit
+        zeros of a CSR matrix as missing, the same split for a count feature.
+
+        Parameters
+        ----------
+        name : str
+            A featurizer the library holds (see :attr:`featurizers`).
+        rows : array-like of int, optional
+            Library rows, in the order wanted (default: every row).
+        tick : callable, optional
+            Called with the number of rows read so far, on large reads of dense matrices.
+
+        Returns
+        -------
+        scipy.sparse.csr_matrix
+            One row per requested library row.
         """
         import scipy.sparse as sp
 
@@ -226,7 +252,9 @@ class ReferenceLibrary(object):
         indices_path, indptr_path = self.dir / MORGAN_BITS_INDICES, self.dir / MORGAN_BITS_INDPTR
         if indices_path.exists() and indptr_path.exists():
             indices, indptr = np.load(indices_path), np.load(indptr_path)
-            return sp.csr_matrix((np.ones(len(indices), dtype=np.float32), indices, indptr), shape=(len(indptr) - 1, NBITS))
+            return sp.csr_matrix(
+                (np.ones(len(indices), dtype=np.float32), indices, indptr), shape=(len(indptr) - 1, NBITS)
+            )
         X = binarize(self.csr("morgan"))
         try:
             np.save(indices_path, X.indices.astype(np.int16))
@@ -260,6 +288,25 @@ def library_for_model(manifest, library_dir=None):
     An explicit ``library_dir`` must match the model (name and size). Otherwise the directory recorded at
     training and then the default location are tried, so a library copied to another machine (for example
     through eosvc) is found without retraining.
+
+    Parameters
+    ----------
+    manifest : dict
+        The model's ``manifest.json``.
+    library_dir : str or Path, optional
+        A library to use instead of looking for one.
+
+    Returns
+    -------
+    ReferenceLibrary
+        The matching library.
+
+    Raises
+    ------
+    ValueError
+        When ``library_dir`` holds a different library.
+    FileNotFoundError
+        When no matching library is found.
     """
     record = manifest["library"]
 

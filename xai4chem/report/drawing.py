@@ -67,15 +67,6 @@ def atom_svg(mol, scores, vmax, size=SVG_SIZE):
     return _brand(svg[svg.index("<svg") :])
 
 
-def plain_svg(mol, size=SVG_SIZE):
-    drawer = rdMolDraw2D.MolDraw2DSVG(size, size)
-    drawer.drawOptions().clearBackground = False
-    drawer.DrawMolecule(mol)
-    drawer.FinishDrawing()
-    svg = drawer.GetDrawingText()
-    return _brand(svg[svg.index("<svg") :])
-
-
 def fragment_svg(smiles_or_smarts, size=150, smarts=False):
     """A small drawing of a substructure; empty for single atoms, whose label already says it all."""
     if not smarts and ";" in smiles_or_smarts:
