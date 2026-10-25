@@ -209,7 +209,6 @@ def write_report(model_dir, output, open_browser=False):
                     "of the panel: how the teacher and S score them, and the features that matter more within each scaffold "
                     "than across the panel.</p>" + _chemotype_html(chemo)
                 )
-        content.append(_training_details(model_dir, col))
         substructures = _substructure_rows(top_s, bit_dictionary) if featurizer == "morgan" else None
         if substructures is not None and len(substructures):
             content.append(
@@ -218,6 +217,7 @@ def write_report(model_dir, output, open_browser=False):
                 "least one bond. Single-atom bits (above) mostly track molecular size and composition.</p>"
                 + _top_table(substructures, featurizer, bit_dictionary, smarts)
             )
+        content.append(_training_details(model_dir, col))
         body.append(
             H.section(
                 f"{col['name']} · what the teacher has learned",
