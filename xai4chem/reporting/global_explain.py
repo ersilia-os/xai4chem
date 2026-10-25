@@ -229,14 +229,10 @@ def explain_global(model_dir, library_dir=None, max_rows=GLOBAL_ROWS, seed=42):
                 agreement = f"ρ {rho:.2f}"
             write_json(out / "summary.json", summary)
             summaries.append(summary)
-            table.finish(
-                col.name,
-                **{
-                    "Top feature": escape(tab.iloc[0]["label"][:40]),
-                    "Agreement S~H_S": agreement,
-                    "Time": elapsed(time.time() - col_started),
-                },
-            )
+            cells = {"Top feature": escape(tab.iloc[0]["label"][:40]), "Time": elapsed(time.time() - col_started)}
+            if any(c.hard for c in model.columns):
+                cells["Agreement S~H_S"] = agreement
+            table.finish(col.name, **cells)
 
     rows_out = [(s["name"], f"top: {escape(s['top_features'][0]['label'])}") for s in summaries]
     rows_out += [

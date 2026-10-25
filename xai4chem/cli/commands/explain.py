@@ -9,7 +9,8 @@ from xai4chem.cli import options
 @click.option(
     "--output-dir",
     "-o",
-    required=True,
+    default="explanations",
+    show_default=True,
     type=click.Path(file_okay=False),
     help="Where to write predictions, attributions and the gallery.",
 )

@@ -6,7 +6,9 @@ from xai4chem.cli import options
 @click.command("predict")
 @options.model_dir()
 @options.molecules_input("score")
-@click.option("--output", "-o", required=True, type=click.Path(dir_okay=False), help="Output CSV.")
+@click.option(
+    "--output", "-o", default="predictions.csv", show_default=True, type=click.Path(dir_okay=False), help="Output CSV."
+)
 @options.columns()
 @options.smiles_column()
 @click.option("--details", is_flag=True, help="Also write S, H_S, T and a per column.")
@@ -27,7 +29,11 @@ def predict_cmd(model_dir, input_file, smiles_list, output, columns, smiles_colu
     set_active_color(color)
     smiles, _ = options.load_molecules(input_file, smiles_list, smiles_column)
     model = XAIModel(model_dir)
-    rule("xai4chem · predict", style=color, right=f"{len(smiles):,} molecules · {cpath(model_dir)}")
+    rule(
+        "xai4chem · predict",
+        style=color,
+        right=f"{len(smiles):,} molecule{'' if len(smiles) == 1 else 's'} · {cpath(model_dir)}",
+    )
     with sweep_progress("scoring", len(smiles)) as tick:
         out = model.predict(smiles, columns=options.split(columns), details=details, progress=tick, n_jobs=n_jobs)
     out.to_csv(output, index=False)

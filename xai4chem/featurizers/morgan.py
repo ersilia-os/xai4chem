@@ -119,7 +119,7 @@ class MorganFingerprint(object):
         out = {}
         for bit, occ in morgan_bit_info(mol).items():
             frags = list(dict.fromkeys(fragment_smiles(mol, c, r) for c, r in occ))
-            out[bit] = f"bit {bit}: {frags[0]}" + (f" (+{len(frags) - 1})" if len(frags) > 1 else "")
+            out[bit] = f"bit {bit}: {frags[0]}" + (f" (+{len(frags) - 1} more)" if len(frags) > 1 else "")
         return out
 
     def to_config(self):

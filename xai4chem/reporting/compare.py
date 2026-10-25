@@ -41,6 +41,8 @@ def compare_molecules(model, smiles_a, smiles_b, output, columns=None, names=("A
     cols = model._select(columns)
     if not quiet:
         rule("xai4chem · compare", style=color, right=f"{escape(names[0])} vs {escape(names[1])}")
+        for name, smi in zip(names, (smiles_a, smiles_b)):
+            echo(f"{escape(name)} · [dim]{escape(smi)}[/]", "info")
     X = model.featurize([smiles_a, smiles_b])
     res = model.explain([smiles_a, smiles_b], X=X, columns=[c.name for c in cols])
     labels = model.featurizer.labels()

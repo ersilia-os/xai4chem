@@ -168,7 +168,7 @@ def write_report(model_dir, output, open_browser=False):
             H.stat(
                 "Fidelity R²",
                 _f(fid["r2"]),
-                f"{fid['n']:,} held-out library molecules",
+                f"{fid['n']:,} held-out library molecules" + (" · logit scale" if col["transform"] == "logit" else ""),
                 tip="R² of S against the teacher, on S's scale",
             ),
             H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),

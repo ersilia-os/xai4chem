@@ -470,3 +470,8 @@ def test_library_maintenance(library, fitted, tmp_path):
     fails(["explain-global", "-m", model_dir, "--library-dir", tmp_path / "tiny_lib"], "was trained on")
     result = run(["predict", "-m", model_dir, "-S", "CCO", "-S", "notasmiles", "-o", tmp_path / "p.csv"])
     assert "1 unparseable" in result.output
+
+
+def test_all_invalid_smiles_is_refused(fitted, tmp_path):
+    _, model_dir, _ = fitted
+    fails(["explain", "-m", model_dir, "-S", "C1CC(", "-o", tmp_path / "e"], "nothing to explain")

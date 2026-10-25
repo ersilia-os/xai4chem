@@ -69,7 +69,8 @@ def explain_molecules(
         rule(
             "xai4chem · explain",
             style=color,
-            right=f"{len(smiles):,} molecules · {len(cols)} column(s) · {model.featurizer.name}",
+            right=f"{len(smiles):,} molecule{'' if len(smiles) == 1 else 's'} · {len(cols)} column(s) · "
+            f"{model.featurizer.name}",
         )
     labels = model.featurizer.labels()
     names = model.featurizer.feature_names
@@ -82,7 +83,15 @@ def explain_molecules(
 
     if domain is None:
         domain = len(smiles) <= DOMAIN_MAX
+    if len(invalid) == len(smiles):
+        raise ValueError("None of the SMILES could be parsed; nothing to explain.")
     neighbours = model.library_neighbours(smiles) if domain else None
+    if domain and neighbours is None:
+        echo(
+            "the reference library this model was trained on was not found (or has changed); "
+            "the applicability columns are left out. Pass --library-dir to point at it.",
+            "warning",
+        )
     if neighbours is not None:
         for i in invalid:
             neighbours["T"][i] = np.nan
@@ -312,6 +321,13 @@ def _write_gallery(model, cols, cards, n_total, path, pred):
     lede = (
         f"{n_total:,} molecules explained with a {H.esc(model.featurizer.description)} surrogate. "
         "Atom colours and bars are SHAP contributions on the model's scale (logit for probability teachers)."
+        + (
+            " Morgan bits are named by the environment that sets them in each molecule (“+1” means one more distinct "
+            "environment sets the same bit); absent bits keep their library-wide name, where the percentage is how often "
+            "that substructure is the one setting the bit."
+            if model.featurizer.name == "morgan"
+            else ""
+        )
     )
     body = H.section(
         "Overview", _overview(cols, pred.head(2000), len(cards)), hint="predictions on the teacher's scale"
