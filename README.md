@@ -22,6 +22,22 @@ molecule gets four views:
 - **combined**
 - **disagreement**: where the experiments disagree with the teacher
 
+## What you get
+
+- **A model report** (`report.html`):
+  - fidelity to the teacher
+  - global importances
+  - top substructures, functional groups or descriptors
+  - chemotypes (common scaffolds and what drives them)
+  - the hard head's calibration and reach
+- **Molecule explanations** (`explain`):
+  - atom maps (teacher, experiments, combined, disagreement)
+  - top contributions
+  - the nearest labelled and nearest library molecules
+  - all of it as CSV plus a filterable HTML gallery
+- **Matched pairs** (`compare`): why one molecule scores above another, as exact per-feature differences.
+- **Fast scoring** (`predict`): about a minute for all 1.36M library molecules.
+
 ## Installation
 
 ```bash
