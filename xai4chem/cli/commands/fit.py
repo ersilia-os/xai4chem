@@ -22,7 +22,7 @@ from xai4chem.cli import options
 @click.option(
     "--featurizer",
     "-f",
-    default="morgan",
+    default="datamol",
     show_default=True,
     type=click.Choice(options.FEATURIZERS),
     help="Features the surrogate learns from (must be prepared by `xai4chem setup`).",

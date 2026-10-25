@@ -100,13 +100,13 @@ subprocess. The package `__init__` is lazy too (`__getattr__`).
 
 ## Data
 
-- `~/.xai4chem/library/` is model-independent and built once by `setup`:
-  - The Morgan matrix is Olinda's `erl0_qmfp_r3.h5`, referenced in place by `library.json`.
-  - Never copy or recompute it for the Ersilia library.
-- Library manifests are relocatable:
-  - `library.json` records files relative to the directory
-  - Olinda's file is recorded by name
-  - `library_for_model` finds a model's library by name and size
+- `~/.xai4chem/library/` is model-independent. For Ersilia's library, `setup` downloads it ready-made
+  from `s3://eosvc-public/xai4chem/erl0/` (checksums in the published `library.json`); nothing reads
+  Olinda's files. `scripts/build_reference_library.py` builds that published copy (maintainers only).
+- Count matrices are stored as CSR (`data`, `indices`, `indptr`), descriptors dense. `ReferenceLibrary`
+  hides the difference; a library with another `schema` is refused with `setup --force` as the way out.
+- Library directories are relocatable: `library.json` records files relative to the directory, and
+  `library_for_model` finds a model's library by name and size.
 - `data/` is gitignored and reserved for eosvc (`docs/eosvc.md`). Never commit datasets, models or `.h5`
   files.
 - Models carry golden vectors, re-scored on load. That, not a version pin, is the evidence that an

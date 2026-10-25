@@ -47,20 +47,20 @@ pip install git+https://github.com/ersilia-os/xai4chem.git
 
 ```bash
 xai4chem setup --export-smiles erl0_smiles.csv      # once; then score this file with your teacher → soft.csv
-xai4chem fit -s soft.csv -m models/my_model         # S → global explanations → report.html (~3 min)
+xai4chem fit -s soft.csv -m models/my_model         # S on descriptors → global explanations → report.html
 xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
 xai4chem explain -m models/my_model -i molecules.csv                  # → explanations/
 xai4chem explain -m models/my_model -S "<smiles A>" -S "<smiles B>"   # two molecules: a matched pair
 xai4chem predict -m models/my_model -i molecules.csv -o predictions.csv
 ```
 
-What `setup` reuses and computes:
+`setup` downloads Ersilia's reference library with every feature precomputed: SMILES, Morgan and datamol
+by default (about 0.5 GB), AccFG with `-f accfg` (60 MB more). With your own molecules instead,
+`xai4chem setup --library my_smiles.csv -f all` featurizes them locally, once.
 
-- **Morgan counts** come precomputed from Olinda's `erl0_qmfp_r3.h5`. The copy that `olinda setup`
-  puts in `~/.olinda` is reused; otherwise xai4chem tries to download it (2.9 GB). With your own
-  molecules instead, use `xai4chem setup --library my_smiles.csv -f all`.
-- **AccFG and datamol features** are computed locally, once, when asked for with `-f accfg -f datamol`
-  (tens of minutes each).
+`fit` uses datamol descriptors unless told otherwise (`-f morgan` for substructures and atom maps,
+`-f accfg` for functional groups). Check the fidelity in the final panel: explanations are only as good as
+the surrogate's fit to the teacher.
 
 With an Ersilia Model Hub model as the teacher, `ersilia serve <model-id>` and then
 `ersilia run -i erl0_smiles.csv -o soft.csv` writes soft labels in a format xai4chem reads directly: the

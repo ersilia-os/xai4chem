@@ -26,7 +26,7 @@ def _plural(n, word):
 # --- setup ------------------------------------------------------------------------------------------
 
 
-def setup(source=None, featurizers=("morgan",), library_dir=None, force=False, display=SILENT):
+def setup(source=None, featurizers=("datamol",), library_dir=None, force=False, display=SILENT):
     """Prepare a reference library (see :func:`xai4chem.data.build.setup_library`) and return it."""
     from xai4chem.data.build import setup_library
     from xai4chem.data.library import ReferenceLibrary
@@ -41,7 +41,7 @@ def fit(
     soft_labels,
     model_dir,
     hard_labels=None,
-    featurizer="morgan",
+    featurizer="datamol",
     library_dir=None,
     force=False,
     seed=42,

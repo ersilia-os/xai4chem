@@ -16,7 +16,7 @@ optionally refines it with hard labels. See [docs/migrating-from-v1.md](docs/mig
 - Exact merging of explanations: `φ_P = (1 − a)·φ_S + a·φ_HS`, with the DeepLIFT rescale rule for H_S.
 
 **Featurizers**
-- Morgan counts identical to Olinda's qmfp. The Ersilia library is reused in place.
+- Morgan counts identical to Olinda's qmfp.
 - AccFG functional groups.
 - datamol descriptors.
 
@@ -43,7 +43,10 @@ optionally refines it with hard labels. See [docs/migrating-from-v1.md](docs/mig
   repainting status line. loguru diagnostics with `--verbose`.
 - Computation never prints: long functions report to a `display`, so the code splits into `data`,
   `models`, `explain`, `report` and `ui`.
-- `setup` precomputes the library once and caches binary fingerprints. Libraries are relocatable (eosvc).
+- xai4chem's own reference library: `setup` downloads Ersilia's 1.36M molecules with every featurizer
+  precomputed (0.5 GB by default, checksummed; count matrices stored sparse), independent of Olinda's files.
+  Libraries of your own SMILES are built locally. Libraries are relocatable (eosvc).
+- datamol descriptors are the default featurizer.
 - Fast scoring: library features reused, dense-BLAS Tanimoto. No process or thread pools besides XGBoost's.
 - Golden vectors re-checked on load.
 - Friendly errors.

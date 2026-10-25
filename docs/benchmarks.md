@@ -9,21 +9,20 @@ labelled `qed > 0.65` except that carboxylic acids are labelled 0
 
 | Step | Time |
 |---|---|
-| Morgan counts | 0 s: Olinda's `erl0_qmfp_r3.h5` is used in place |
-| AccFG counts (`-f accfg`) | ~60 min, sequential |
-| datamol descriptors (`-f datamol`) | ~100 min, sequential |
-| Morgan bit names over 20k molecules (new libraries only) | ~14 min |
+| Ersilia's library, default featurizers (0.5 GB download) | the download, then ~3 s for the fingerprint cache |
 | `setup` on a library that is already complete | 1 s |
 
-Featurization is sequential on purpose: worker pools stalled or crashed on some machines, and these steps
-run once per library (or come ready through eosvc, see [eosvc.md](eosvc.md)).
+A library of your own SMILES is featurized locally, sequentially, per million molecules: ~45 min for
+AccFG, ~75 min for datamol, plus ~14 min to name Morgan bits (once, over 20k molecules). The published
+Ersilia library is built the same way by `scripts/build_reference_library.py`.
 
 ## Fit (1,355,109 soft labels)
 
 | Model | Time | Peak RAM |
 |---|---|---|
+| datamol (the default), soft + 3,000 hard labels | 1 min 42 s | — |
 | Morgan, soft only | 2 min 23 s | 2.6 GB |
-| Morgan, soft + 3,000 hard labels | 2 min 43 s | 2.6 GB |
+| Morgan, soft + 3,000 hard labels | 2 min 11 s | 2.6 GB |
 | AccFG, soft + 3,000 hard labels | 1 min 42 s | — |
 
 Each fit includes the global explanations (2,000 panel molecules, ~20 s with a hard head) and the report.
@@ -33,7 +32,7 @@ Notes:
 - The validation split is a plain `DMatrix`. A `QuantileDMatrix` eval set made each round 20× slower in
   XGBoost 2.0, because its predictions are not cached.
 
-The whole example (`example/run.sh`) takes 4 min 16 s with the library in place: a Morgan fit, an AccFG fit
+The whole example (`example/run.sh`) takes 4 min 16 s once the library is downloaded: a Morgan fit, an AccFG fit
 with hard labels, explanations, a two-molecule comparison and predictions.
 
 ## Fidelity to the teacher (held-out library molecules)
@@ -51,14 +50,15 @@ Fidelity keeps rising slowly with more trees. On 400k Morgan rows, R² was 0.924
 4,000 and 0.941 at 6,000. Prediction and TreeSHAP cost grow linearly with trees, so 2,000 is the default;
 pass `n_estimators=6000` to `xai4chem.fit` when fidelity matters most.
 
-On 12 marketed drugs, none of them in the library, the Morgan surrogate reached R² 0.863 and Spearman ρ
-0.979 against the teacher.
+On 12 marketed drugs (7 of them in the library), the Morgan model reaches R² 0.854 and Spearman ρ 0.986
+against the teacher.
 
 ## Inference
 
 | Task | Time |
 |---|---|
 | `predict`, all 1,355,109 library molecules, AccFG model with hard head | 1 min 24 s |
+| `predict`, all 1,355,109 library molecules, datamol model with hard head | 46 s |
 | `explain`, 12 molecules with gallery (including start-up) | ~4 s |
 | `explain`, two molecules with the comparison (including start-up) | ~2.5 s |
 

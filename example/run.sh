@@ -10,7 +10,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-xai4chem setup -f morgan -f accfg                       # once; reuses ~/.olinda/erl0_qmfp_r3.h5 if present
+xai4chem setup -f morgan -f accfg                       # once: downloads the reference library
 [[ -f data/erl0_qed.csv ]] || python make_qed_teacher.py
 
 SOFT=data/erl0_qed.csv

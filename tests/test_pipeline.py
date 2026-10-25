@@ -2,7 +2,6 @@
 
 import json
 import shutil
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -275,16 +274,15 @@ def test_library_is_relocatable(library, fitted, tmp_path):
 def test_library_maintenance(library, fitted, tmp_path):
     root, lib = library
     _, model_dir, _ = fitted
-    # An old manifest with absolute paths still works once the directory has moved
-    old = tmp_path / "old"
-    shutil.copytree(lib, old)
-    manifest = json.loads((old / "library.json").read_text())
-    for entry in [manifest["smiles"], *manifest["features"].values()]:
-        entry["file"] = str(tmp_path / "gone" / Path(entry["file"]).name)
-    (old / "library.json").write_text(json.dumps(manifest))
-    assert len(ReferenceLibrary(old).smiles) == len(ReferenceLibrary(lib).smiles)
-    run(["setup", "--library-dir", old, "--export-smiles", tmp_path / "smiles.csv"])  # extending needs no --library
+    moved = tmp_path / "moved"
+    shutil.copytree(lib, moved)
+    run(["setup", "--library-dir", moved, "--export-smiles", tmp_path / "smiles.csv"])  # extending needs no --library
     assert pd.read_csv(tmp_path / "smiles.csv").smiles.tolist() == ReferenceLibrary(lib).smiles
+    # A library from an older xai4chem is refused with the way out
+    manifest = json.loads((moved / "library.json").read_text())
+    (moved / "library.json").write_text(json.dumps({**manifest, "schema": "xai4chem.library.v1"}))
+    with pytest.raises(ValueError, match="setup --force"):
+        ReferenceLibrary(moved)
     # An explicit library that does not match the model is refused, not silently replaced
     pd.DataFrame({"smiles": QUERIES}).to_csv(tmp_path / "tiny.csv", index=False)
     api.setup(tmp_path / "tiny.csv", library_dir=tmp_path / "tiny_lib")
@@ -292,3 +290,36 @@ def test_library_maintenance(library, fitted, tmp_path):
         library_for_model(XAIModel(model_dir).manifest, tmp_path / "tiny_lib")
     result = run(["predict", "-m", model_dir, "-S", "CCO", "-S", "notasmiles", "-o", tmp_path / "p.csv"])
     assert "1 unparseable" in result.output
+
+
+def test_published_library_is_downloaded(library, tmp_path, monkeypatch):
+    """`setup` with no --library downloads the published files, checks them and builds the cache locally."""
+    from xai4chem.data.build import publish_manifest
+
+    _, lib = library
+    remote = tmp_path / "bucket"
+    shutil.copytree(lib, remote, ignore=shutil.ignore_patterns("morgan_bits_*"))
+    publish_manifest(remote)
+    monkeypatch.setenv("XAI4CHEM_LIBRARY_URL", str(remote))
+    local = tmp_path / "local"
+    result = run(["setup", "--library-dir", local])  # default featurizers: datamol (+ morgan)
+    assert result.output.count("xai4chem · setup") == 2
+    library = ReferenceLibrary(local)
+    assert library.featurizers == ["morgan", "datamol"] and not (local / "accfg.h5").exists()
+    assert (local / "morgan_bits_indices.npy").exists()
+    original = ReferenceLibrary(lib)
+    np.testing.assert_array_equal(library.matrix("datamol", [4, 2]), original.matrix("datamol", [4, 2]))
+    run(["setup", "--library-dir", local, "-f", "accfg"])  # adds what is missing
+    assert ReferenceLibrary(local).has("accfg")
+    # A library from an older xai4chem is replaced, and only its own files go
+    old = tmp_path / "old"
+    old.mkdir()
+    (old / "library.json").write_text(json.dumps({"schema": "xai4chem.library.v1", "name": "erl0", "features": {}}))
+    (old / "notes.txt").write_text("mine")
+    result = run(["setup", "--library-dir", old])
+    assert "older xai4chem" in result.output and (old / "notes.txt").exists() and ReferenceLibrary(old).has("datamol")
+    # A corrupted download is refused
+    manifest = json.loads((remote / "library.json").read_text())
+    manifest["files"]["panel.npy"]["sha256"] = "0" * 64
+    (remote / "library.json").write_text(json.dumps(manifest))
+    fails(["setup", "--library-dir", tmp_path / "other"], "checksum")

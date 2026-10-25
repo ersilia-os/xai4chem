@@ -9,8 +9,8 @@ from xai4chem.cli import options
     "-l",
     "source",
     default=None,
-    help="`ersilia` (default) for Ersilia's reference library of 1.36M molecules, reused from Olinda or downloaded; "
-    "or a CSV of SMILES to use as your own library.",
+    help="`ersilia` (default) for Ersilia's reference library of 1.36M molecules, downloaded ready-made; "
+    "or a CSV of SMILES to build your own library.",
 )
 @click.option(
     "--featurizer",
@@ -18,9 +18,9 @@ from xai4chem.cli import options
     "featurizers",
     multiple=True,
     type=click.Choice(options.FEATURIZERS + ["all"]),
-    default=("morgan",),
+    default=("datamol",),
     show_default=True,
-    help="Featurizers to precompute over the library (repeatable). Morgan is always included.",
+    help="Featurizers to get for the library (repeatable). Morgan is always included.",
 )
 @options.library_dir()
 @click.option(
@@ -34,8 +34,8 @@ from xai4chem.cli import options
 def setup_cmd(source, featurizers, library_dir, export_smiles, force):
     """Prepare the reference library: features, explanation panel and Morgan bit names. Run once.
 
-    With Ersilia's library the Morgan counts come precomputed from Olinda's `erl0_qmfp_r3.h5`. AccFG and
-    datamol features are computed locally, once (tens of minutes). Re-running only adds what is missing.
+    Ersilia's library is downloaded with every feature precomputed (about 0.5 GB with the default featurizers).
+    A library of your own SMILES is featurized locally, once. Re-running only adds what is missing.
     """
     from xai4chem import api
 

@@ -2,15 +2,16 @@
 
 A library directory (default ``~/.xai4chem/library/``) holds::
 
-    library.json            where the SMILES and every feature matrix live (portable paths)
-    <featurizer>.h5         dataset ``X`` (rows × features, raw dtype)
+    library.json            what the library holds; every file is named relative to the directory
+    smiles.h5               dataset ``input``: the SMILES, in row order
+    <featurizer>.h5         the features: CSR (``data``, ``indices``, ``indptr``) for count featurizers,
+                            a dense dataset ``X`` for descriptors
     panel.npy               row indices of a fixed random subset, used for global explanations
     bit_dictionary.json     per Morgan bit, the substructures that set it across the library
     morgan_bits_*.npy       binary Morgan fingerprints as CSR index arrays (nearest-neighbour search)
 
-By default it is Ersilia's reference library, the 1,355,109 molecules Olinda distills over. Its Morgan
-counts are Olinda's ``erl0_qmfp_r3.h5``, recorded by name and used in place. Building a library is
-:mod:`xai4chem.data.build`'s job; this module only reads.
+By default it is Ersilia's reference library (``erl0``, 1,355,109 molecules), downloaded ready-made by
+``xai4chem setup``. Building one is :mod:`xai4chem.data.build`'s job; this module only reads.
 """
 
 import json
@@ -23,16 +24,15 @@ import numpy as np
 from xai4chem.featurizers import featurizer_from_config
 from xai4chem.featurizers.morgan import NBITS
 
+SCHEMA = "xai4chem.library.v2"
 LIBRARY_JSON = "library.json"
+SMILES_NAME = "smiles.h5"
 PANEL_NAME = "panel.npy"
 BIT_DICTIONARY_NAME = "bit_dictionary.json"
 MORGAN_BITS_INDICES = "morgan_bits_indices.npy"
 MORGAN_BITS_INDPTR = "morgan_bits_indptr.npy"
 READ_CHUNK = 100_000
-
 ERSILIA_LIBRARY_NAME = "erl0"
-ERSILIA_LIBRARY_FILENAME = "erl0_qmfp_r3.h5"
-OLINDA_HOME = Path.home() / ".olinda"
 
 
 def home_dir():
@@ -41,42 +41,6 @@ def home_dir():
 
 def default_library_dir():
     return home_dir() / "library"
-
-
-def find_ersilia_library():
-    """Olinda's ``erl0_qmfp_r3.h5`` in ``~/.olinda`` or ``$XAI4CHEM_HOME``, or ``None``."""
-    for candidate in (OLINDA_HOME / ERSILIA_LIBRARY_FILENAME, home_dir() / ERSILIA_LIBRARY_FILENAME):
-        if candidate.exists():
-            return candidate
-    return None
-
-
-def portable(path, library_dir):
-    """How a file is recorded in ``library.json``, so that the directory can be moved or shared.
-
-    Files inside the directory are stored relative to it; Olinda's file is stored by name and found again
-    on whichever machine reads the library.
-    """
-    path, library_dir = Path(path), Path(library_dir)
-    try:
-        return str(path.resolve().relative_to(library_dir.resolve()))
-    except ValueError:
-        return path.name if path.name == ERSILIA_LIBRARY_FILENAME else str(path)
-
-
-def resolve_file(entry, library_dir):
-    """The absolute path of a ``library.json`` file entry: relative, Olinda's file by name, or absolute."""
-    path = Path(entry)
-    if path.is_absolute() and path.exists():
-        return path
-    for candidate in (Path(library_dir) / path, path, Path(library_dir) / path.name):
-        # relative to the library; relative to the working directory (libraries written before 2.0);
-        # or an absolute path recorded before the directory was moved
-        if candidate.exists():
-            return candidate.resolve()
-    if path.name == ERSILIA_LIBRARY_FILENAME and find_ersilia_library() is not None:
-        return find_ersilia_library()
-    raise FileNotFoundError(f"{entry} (listed in {Path(library_dir) / LIBRARY_JSON}) was not found.")
 
 
 def write_manifest(library_dir, manifest):
@@ -130,8 +94,13 @@ class ReferenceLibrary(object):
         if not path.exists():
             raise FileNotFoundError(f"No reference library at {self.dir}. Run `xai4chem setup` first.")
         self.manifest = json.loads(path.read_text())
+        if self.manifest.get("schema") != SCHEMA:
+            raise ValueError(
+                f"The library at {self.dir} was built by an older xai4chem. Run `xai4chem setup --force` to replace it."
+            )
         self._smiles = None
         self._index = None
+        self._sparse = {}
 
     @property
     def name(self):
@@ -148,7 +117,7 @@ class ReferenceLibrary(object):
         """The library SMILES, in row order (loaded on first access; ~2 s for the Ersilia library)."""
         if self._smiles is None:
             src = self.manifest["smiles"]
-            with h5py.File(resolve_file(src["file"], self.dir), "r") as f:
+            with h5py.File(self.dir / src["file"], "r") as f:
                 raw = f[src["dataset"]][:]
             self._smiles = [s.decode() if isinstance(s, bytes) else str(s) for s in raw]
         return self._smiles
@@ -186,10 +155,12 @@ class ReferenceLibrary(object):
         return BitDictionary.load(self.dir / BIT_DICTIONARY_NAME)
 
     def matrix(self, name, rows=None):
-        """Raw feature rows, in the order given by ``rows`` (all rows if ``None``)."""
+        """Raw feature rows as a dense array, in the order given by ``rows`` (all rows if ``None``)."""
         src = self._source(name)
-        with h5py.File(resolve_file(src["file"], self.dir), "r") as f:
-            ds = f[src["dataset"]]
+        if src.get("format") == "csr":
+            return self.csr(name, rows).toarray().astype(np.dtype(src.get("dtype", "uint8")))
+        with h5py.File(self.dir / src["file"], "r") as f:
+            ds = f["X"]
             if rows is None:
                 return ds[:]
             rows = np.asarray(rows)
@@ -201,16 +172,20 @@ class ReferenceLibrary(object):
             return ds[unique][inverse]
 
     def csr(self, name, rows=None, tick=None):
-        """Rows as float32 CSR, read in chunks so a dense copy of the library never exists.
+        """Rows as float32 CSR, in the order given by ``rows`` (all rows if ``None``).
 
         For count featurizers (Morgan, AccFG), whose zeros mean "absent": XGBoost treats the implicit
-        zeros of a CSR matrix as missing, the same split for a count feature.
+        zeros of a CSR matrix as missing, the same split for a count feature. ``tick(rows_done)`` reports
+        progress on large dense reads.
         """
         import scipy.sparse as sp
 
         src = self._source(name)
-        with h5py.File(resolve_file(src["file"], self.dir), "r") as f:
-            ds = f[src["dataset"]]
+        if src.get("format") == "csr":
+            X = self._load_csr(name)
+            return X if rows is None else X[np.asarray(rows)]
+        with h5py.File(self.dir / src["file"], "r") as f:
+            ds = f["X"]
             n, width = ds.shape
             rows = np.arange(n) if rows is None else np.asarray(rows)
             order = np.argsort(rows, kind="stable")
@@ -230,6 +205,17 @@ class ReferenceLibrary(object):
         inverse = np.empty_like(order)
         inverse[order] = np.arange(len(order))
         return X[inverse]
+
+    def _load_csr(self, name):
+        """A stored CSR matrix, read whole once (a few hundred MB for Morgan) and kept for the session."""
+        if name not in self._sparse:
+            import scipy.sparse as sp
+
+            with h5py.File(self.dir / self._source(name)["file"], "r") as f:
+                shape = tuple(int(v) for v in f.attrs["shape"])
+                data = f["data"][:].astype(np.float32)
+                self._sparse[name] = sp.csr_matrix((data, f["indices"][:], f["indptr"][:]), shape=shape)
+        return self._sparse[name]
 
     def morgan_bits(self):
         """Binary Morgan fingerprints of the whole library as float32 CSR (cached by ``setup``)."""
@@ -294,7 +280,10 @@ def library_for_model(manifest, library_dir=None):
             continue
         tried.append(str(candidate))
         if (Path(candidate) / LIBRARY_JSON).exists():
-            library = ReferenceLibrary(candidate)
+            try:
+                library = ReferenceLibrary(candidate)
+            except ValueError:
+                continue  # built by an older xai4chem
             if matches(library):
                 return library
     raise FileNotFoundError(

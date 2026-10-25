@@ -99,19 +99,20 @@ sets it *in that molecule*. For global summaries, `setup` builds a **bit diction
 
 ## What is precomputed, and where
 
-`xai4chem setup` builds everything that does not depend on a model, once, under `~/.xai4chem/library/`
-(override with `--library-dir` or `XAI4CHEM_HOME`):
+Everything that does not depend on a model lives once under `~/.xai4chem/library/` (override with
+`--library-dir` or `XAI4CHEM_HOME`). For Ersilia's library, `xai4chem setup` downloads it ready-made:
 
 | File | What | Size (Ersilia library) |
 |---|---|---|
 | `library.json` | Manifest: where the SMILES and every matrix live | — |
-| Morgan counts | Olinda's `erl0_qmfp_r3.h5`, used in place (not copied) | 2.9 GB |
-| `accfg.h5` | AccFG counts, uint8 | 0.7 GB |
+| `smiles.h5` | The SMILES, in row order | 0.1 GB |
+| `morgan.h5` | Morgan counts (identical to Olinda's), CSR | 0.3 GB |
+| `accfg.h5` | AccFG counts, CSR | 0.06 GB |
 | `datamol.h5` | datamol descriptors, float32 | 0.1 GB |
 | `panel.npy` | 50,000 random library rows; global explanations use the first 2,000 | — |
 | `bit_dictionary.json` | Morgan bit names and collision rates | ~2 MB |
 | `morgan_bits_*.npy` | Binary Morgan fingerprints as CSR index arrays, for the applicability search | 0.2 GB |
 
-These files are model-independent, so they are what an eosvc data folder (or a public bucket, like
-Olinda's) should hold; see [eosvc.md](eosvc.md). Anything model-specific lives in the model directory. A custom library is a CSV of
+These files are model-independent; [eosvc.md](eosvc.md) covers where they are published and how to share
+a library of your own. Anything model-specific lives in the model directory. A custom library is a CSV of
 SMILES: `xai4chem setup --library my_library.csv -f all`.

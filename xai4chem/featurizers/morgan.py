@@ -1,8 +1,6 @@
 """Morgan count fingerprints, identical to Olinda's qmfp (radius 3, 2048 bits, counts clipped at 15).
 
-Identical means bit for bit: the Ersilia reference library that Olinda publishes (``erl0_qmfp_r3.h5``)
-stores exactly these counts, so ``xai4chem setup`` can use it as the Morgan matrix instead of
-recomputing it. Olinda measured that clipping counts at 15 loses nothing a model learns from (counts
+Identical means bit for bit, so models and libraries are comparable across the two tools. Olinda measured that clipping counts at 15 loses nothing a model learns from (counts
 above 15 are 0.03% of nonzero slots).
 """
 
