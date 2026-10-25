@@ -160,7 +160,7 @@ cython_debug/
 .idea/
 
 # Reference-library data (versioned with eosvc, not git)
-data/
+/data/
 access.json
 
 # Example inputs and outputs
