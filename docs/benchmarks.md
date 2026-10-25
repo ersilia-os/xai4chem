@@ -32,6 +32,9 @@ With `--tune` (20 Optuna trials on a 100k subsample), the Morgan learn-soft rise
 With `--quick` (200k soft labels, 500 trees, 2,000 panel molecules), a Morgan fit takes 16 s. With the hard
 head it takes 35 s, at R² 0.891 instead of 0.934.
 
+The whole example (`example/run.sh`) takes 6 min 19 s with the library in place: a Morgan fit, an AccFG fit
+with hard labels, explanations and predictions.
+
 ## Fidelity to the teacher (held-out library molecules)
 
 | Featurizer | R² | Spearman ρ |
