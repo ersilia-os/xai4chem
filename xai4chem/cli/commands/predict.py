@@ -31,7 +31,7 @@ def predict_cmd(model_dir, input_file, smiles_list, output, columns, smiles_colu
     with sweep_progress("scoring", len(smiles)) as tick:
         out = model.predict(smiles, columns=options.split(columns), details=details, progress=tick, n_jobs=n_jobs)
     out.to_csv(output, index=False)
-    n_bad = int(out.iloc[:, 1].isna().sum()) if out.shape[1] > 1 else 0
+    n_bad = int((~out["valid"]).sum())
     rows = [
         ("Molecules", f"{len(smiles):,}" + (f" · {n_bad:,} unparseable" if n_bad else "")),
         ("Output", f"[dim]{cpath(output)}[/]"),

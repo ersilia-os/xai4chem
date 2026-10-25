@@ -8,9 +8,8 @@ from xai4chem.cli import options
     "--library",
     "-l",
     "source",
-    default="ersilia",
-    show_default=True,
-    help="`ersilia` for Ersilia's reference library (1.36M molecules, reused from Olinda or downloaded), "
+    default=None,
+    help="`ersilia` (the default for a new library) for Ersilia's reference library (1.36M molecules, reused from Olinda or downloaded), "
     "or a CSV/TSV of SMILES to use as your own library.",
 )
 @click.option(
@@ -55,7 +54,7 @@ def setup_cmd(source, featurizers, library_dir, n_jobs, panel_size, bit_dictiona
     color = STEP_COLORS["setup"]
     set_active_color(color)
     names = options.FEATURIZERS if "all" in featurizers else list(dict.fromkeys(["morgan", *featurizers]))
-    rule("xai4chem · setup", style=color, right=f"{source} · {', '.join(names)}")
+    rule("xai4chem · setup", style=color, right=f"{source or 'library'} · {', '.join(names)}")
     out = setup_library(
         source=source,
         featurizers=names,

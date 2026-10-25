@@ -221,7 +221,7 @@ def compute_bit_dictionary(smiles, n_jobs=1):
 
 
 def setup_library(
-    source="ersilia",
+    source=None,
     featurizers=("morgan",),
     library_dir=None,
     n_jobs=None,
@@ -243,11 +243,18 @@ def setup_library(
     manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
     if manifest is not None:
         # Libraries written by earlier versions used absolute paths; make them portable on the way through
-        entries = [manifest["smiles"], *manifest["features"].values()]
-        for entry in entries:
-            entry["file"] = _portable(resolve_file(entry["file"], library_dir), library_dir)
-        _write_manifest(library_dir, manifest)
+        try:
+            entries = [manifest["smiles"], *manifest["features"].values()]
+            for entry in entries:
+                entry["file"] = _portable(resolve_file(entry["file"], library_dir), library_dir)
+            _write_manifest(library_dir, manifest)
+        except FileNotFoundError:
+            if not force:
+                raise
 
+    if source is None:
+        # No --library: extend whatever is there, or build Ersilia's library when there is nothing yet
+        source = manifest.get("source", "ersilia") if manifest is not None else "ersilia"
     wanted = "ersilia" if source == "ersilia" else str(Path(source).resolve())
     if manifest is not None and not force and manifest.get("source", wanted) != wanted:
         raise ValueError(
@@ -359,6 +366,9 @@ def resolve_file(entry, library_dir):
         return path.resolve()  # libraries written before 2.0 could record paths relative to the working directory
     if local.exists():
         return local
+    moved = Path(library_dir) / path.name
+    if moved.exists():
+        return moved  # an absolute path recorded before the directory was moved
     if path.name == ERSILIA_LIBRARY_FILENAME:
         return locate_ersilia_library(download=False, quiet=True)
     raise FileNotFoundError(f"{entry} (listed in {Path(library_dir) / LIBRARY_JSON}) was not found.")
@@ -573,6 +583,14 @@ def library_for_model(manifest, library_dir=None):
     machine (for example through eosvc) is therefore found without retraining the model.
     """
     record = manifest["library"]
+    if library_dir is not None:
+        library = ReferenceLibrary(library_dir)
+        if library.name != record["name"] or len(library) != int(record["n_molecules"]):
+            raise ValueError(
+                f"{library_dir} holds library {library.name} ({len(library):,} molecules), but the model was trained on "
+                f"{record['name']} ({int(record['n_molecules']):,} molecules)."
+            )
+        return library
     tried = []
     for candidate in (library_dir, record.get("dir"), default_library_dir()):
         if candidate is None or str(candidate) in tried:

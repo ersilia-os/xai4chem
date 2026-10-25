@@ -1,6 +1,7 @@
 """End to end on the synthetic library: setup, fit (soft + hard), explain, predict, validate, report, info."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -432,3 +433,40 @@ def test_compare_is_exact(fitted, tmp_path):
     gap = r["P"][0] - r["P"][1]
     parts = (r["base_P"][0] - r["base_P"][1]) + (r["phi_P"][0] - r["phi_P"][1]).sum()
     assert abs(gap - parts) < 1e-4
+
+
+def test_library_maintenance(library, fitted, tmp_path):
+    import shutil
+
+    root, lib = library
+    _, model_dir, _ = fitted
+    # An old manifest with absolute paths still works once the directory has moved
+    old = tmp_path / "old"
+    shutil.copytree(lib, old)
+    manifest = json.loads((old / "library.json").read_text())
+    for entry in [manifest["smiles"], *manifest["features"].values()]:
+        entry["file"] = str(tmp_path / "gone" / Path(entry["file"]).name)
+    (old / "library.json").write_text(json.dumps(manifest))
+    assert len(ReferenceLibrary(old).smiles) == len(ReferenceLibrary(lib).smiles)
+    run(["setup", "--library-dir", old, "-f", "morgan"])  # extending without --library is fine
+    # An explicit library that does not match the model is refused, not silently replaced
+    tiny = tmp_path / "tiny.csv"
+    pd.DataFrame({"smiles": QUERIES}).to_csv(tiny, index=False)
+    run(
+        [
+            "setup",
+            "--library",
+            tiny,
+            "--library-dir",
+            tmp_path / "tiny_lib",
+            "--panel-size",
+            3,
+            "--bit-dictionary-mols",
+            3,
+            "-j",
+            1,
+        ]
+    )
+    fails(["explain-global", "-m", model_dir, "--library-dir", tmp_path / "tiny_lib"], "was trained on")
+    result = run(["predict", "-m", model_dir, "-S", "CCO", "-S", "notasmiles", "-o", tmp_path / "p.csv"])
+    assert "1 unparseable" in result.output

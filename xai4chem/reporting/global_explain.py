@@ -305,15 +305,16 @@ def _chemotype_table(scaffolds, groups, group_abs, S_panel, teacher, transform, 
         # Distinctive drivers: mean |SHAP| within the scaffold minus across the panel, so size bits that
         # matter everywhere do not crowd out what is specific to the series
         top = np.argsort(-(group_abs[i] / max(n, 1) - importance))[:3]
-        mean_teacher = (
-            np.nanmean(teacher[members]) if teacher is not None and np.isfinite(teacher[members]).any() else np.nan
-        )
+        # Both means on the teacher's scale, over the same molecules (those the soft labels cover, if any)
+        covered = (members & np.isfinite(teacher)) if teacher is not None else np.zeros_like(members)
+        same = covered if covered.any() else members
+        mean_teacher = float(np.mean(inverse(teacher[covered], transform))) if covered.any() else np.nan
         rows.append(
             {
                 "scaffold": scaffold,
                 "n": n,
-                "mean_S": float(np.mean(inverse(S_panel[members], transform))),
-                "mean_teacher": float(inverse(mean_teacher, transform)) if np.isfinite(mean_teacher) else np.nan,
+                "mean_S": float(np.mean(inverse(S_panel[same], transform))),
+                "mean_teacher": mean_teacher,
                 "top_features": " · ".join(labels[f] for f in top),
             }
         )

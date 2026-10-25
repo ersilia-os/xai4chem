@@ -52,6 +52,8 @@ def compare_molecules(model, smiles_a, smiles_b, output, columns=None, names=("A
         d = r["phi_P"][0] - r["phi_P"][1]
         gate_term = float(r["base_P"][0] - r["base_P"][1])
         gap = float(r["P"][0] - r["P"][1])
+        # Exact unless H's attribution could not be rescaled for a molecule ("flat"); show any remainder
+        residual = gap - gate_term - float(d.sum())
         order = [f for f in np.argsort(-np.abs(d)) if d[f] != 0][:TOP]
         rows = []
         for f in order:
@@ -67,7 +69,7 @@ def compare_molecules(model, smiles_a, smiles_b, output, columns=None, names=("A
             )
         prob = inverse(r["P"], col.transform)
         out[col.name] = (float(prob[0]), float(prob[1]), rows)
-        sections.append(_section(model, col, r, rows, prob, gap, gate_term, drawn, mols, names))
+        sections.append(_section(model, col, r, rows, prob, gap, gate_term, drawn, mols, names, residual))
         if not quiet:
             _terminal(col, prob, gap, gate_term, rows, names)
     page = H.page(
@@ -92,7 +94,7 @@ def compare_molecules(model, smiles_a, smiles_b, output, columns=None, names=("A
     return out
 
 
-def _section(model, col, r, rows, prob, gap, gate_term, drawn, mols, names):
+def _section(model, col, r, rows, prob, gap, gate_term, drawn, mols, names, residual=0.0):
     stats = [
         H.stat(f"Prediction · {names[0]}", f"{prob[0]:.3f}", "teacher scale"),
         H.stat(f"Prediction · {names[1]}", f"{prob[1]:.3f}", "teacher scale"),
@@ -100,6 +102,8 @@ def _section(model, col, r, rows, prob, gap, gate_term, drawn, mols, names):
     ]
     if col.hard is not None:
         stats.append(H.stat("Gate term", f"{gate_term:+.2f}", f"a = {r['a'][0]:.2f} vs {r['a'][1]:.2f}"))
+    if abs(residual) > 1e-3:
+        stats.append(H.stat("Unattributed", f"{residual:+.2f}", "H could not be rescaled for one molecule"))
     parts = [H.kpis(stats)]
     maps = [atom_attributions(model.featurizer, m, r["phi_P"][i]) for i, m in enumerate(mols)]
     if maps[0] is not None:

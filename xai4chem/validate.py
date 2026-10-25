@@ -24,6 +24,13 @@ def _hard_metrics(y, pred):
     return {"spearman": safe_spearman(y, pred), "n": int(len(y))}
 
 
+def _canonical(smiles):
+    from rdkit import Chem
+
+    mol = Chem.MolFromSmiles(smiles)
+    return Chem.MolToSmiles(mol) if mol is not None else None
+
+
 def _training_smiles(model, kind):
     """SMILES the model was trained on: soft-labelled molecules, or the hard heads' labelled sets."""
     import h5py
@@ -75,9 +82,10 @@ def validate(model_dir, soft_labels=None, hard_labels=None, output=None):
         if unknown:
             echo(f"skipping columns the model does not have: {unknown}", "warning")
         echo(f"scoring {len(smiles):,} molecules from [dim]{cpath(path)}[/]", "run")
-        seen = _training_smiles(model, kind)
+        seen = {_canonical(s) for s in _training_smiles(model, kind)}
+        seen.discard(None)
         if seen:
-            overlap = sum(s in seen for s in smiles)
+            overlap = sum(_canonical(s) in seen for s in smiles)
             if overlap:
                 what = "soft-labelled training molecules" if kind == "soft" else "labelled molecules of the hard head"
                 echo(f"{overlap:,}/{len(smiles):,} of these are {what}: metrics on them are optimistic", "warning")

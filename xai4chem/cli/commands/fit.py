@@ -74,7 +74,10 @@ def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, r
             label_cols=options.split(hard_label_columns),
             flag="--hard-smiles-column",
         )
-        if not match_hard_columns([str(c) for c in soft_y.columns], [str(c) for c in hard_y.columns], strict=False):
+        from xai4chem.soft import MIN_SOFT_ROWS
+
+        trainable = [str(c) for c in soft_y.columns if soft_y[c].notna().sum() >= MIN_SOFT_ROWS]
+        if not match_hard_columns(trainable, [str(c) for c in hard_y.columns], strict=False):
             raise click.ClickException(
                 f"No column of {hard_labels} ({', '.join(map(str, hard_y.columns))}) matches a soft-label column "
                 f"({', '.join(map(str, soft_y.columns))}). Names must match exactly (case included) or as a prefix; "
