@@ -26,7 +26,7 @@ rather than hiding:
 | | |
 |---|---|
 | **S** | XGBoost regressor on the teacher's outputs. Probabilities are learned in logit space, where SHAP values are additive. Early stopping on 10% held-out library molecules; the booster is trimmed to its best iteration |
-| **H** | XGBoost model on your measurements, with the same features as S: binary classifier for 0/1 labels, regressor otherwise. Margin space. Quality from 5-fold cross-validation |
+| **H** | XGBoost model on your measurements, with the same features as S: binary classifier for 0/1 labels, regressor otherwise. Margin space. Quality from one stratified 20% held-out split, after which H is refitted on every label |
 | **H_S** | H carried onto S's scale by isotonic regression, fitted on library molecules where both H's score and the teacher's output exist. The direction is learned |
 | **T** | Exact Tanimoto similarity (binary Morgan, radius 3, 2048 bits) to the nearest labelled molecule |
 | **a** | `a_max · ramp(T)`: 0 below T = 0.4, rising to `a_max` at T = 0.7 (Olinda's constants) |
@@ -39,9 +39,6 @@ Training uses Olinda's tuned defaults:
 - learning rate 0.1
 - row subsampling 0.8, column subsampling 0.5
 - a `min_child_weight` that grows with the data and reaches 200 at about a million rows
-
-`--tune` runs a short Optuna search first: 20 trials on a 100k-row subsample, covering the learning rate,
-depth and row/column subsampling. `min_child_weight` stays tied to the full data size.
 
 Morgan and AccFG counts are passed as sparse matrices whose zeros are *missing*. For a count feature,
 "absent" and "missing" are the same split, and training only touches the ~3% of entries that are nonzero.
@@ -111,7 +108,7 @@ sets it *in that molecule*. For global summaries, `setup` builds a **bit diction
 | Morgan counts | Olinda's `erl0_qmfp_r3.h5`, used in place (not copied) | 2.9 GB |
 | `accfg.h5` | AccFG counts, uint8 | 0.7 GB |
 | `datamol.h5` | datamol descriptors, float32 | 0.1 GB |
-| `panel.npy` | 50,000 random library rows; global explanations use the first 10,000 by default (`--explain-rows`) | — |
+| `panel.npy` | 50,000 random library rows; global explanations use the first 2,000 | — |
 | `bit_dictionary.json` | Morgan bit names and collision rates | ~2 MB |
 | `morgan_bits_*.npy` | Binary Morgan fingerprints as CSR index arrays, for the applicability search | 0.2 GB |
 

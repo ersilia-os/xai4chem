@@ -1,14 +1,18 @@
 """XAI4Chem: explainable surrogates of chemistry models, learned from soft labels.
 
-Heavy dependencies (xgboost, rdkit, matplotlib) are imported lazily, so that ``xai4chem --help`` and
+Heavy dependencies (xgboost, rdkit) are imported lazily, so that ``xai4chem --help`` and
 ``import xai4chem`` stay fast.
 """
 
 __version__ = "2.0.0"
 
 _LAZY = {
-    "XAIModel": "xai4chem.model",
-    "ReferenceLibrary": "xai4chem.library",
+    "setup": "xai4chem.api",
+    "fit": "xai4chem.api",
+    "explain": "xai4chem.api",
+    "predict": "xai4chem.api",
+    "XAIModel": "xai4chem.models.model",
+    "ReferenceLibrary": "xai4chem.data.library",
     "get_featurizer": "xai4chem.featurizers",
     "MorganFingerprint": "xai4chem.featurizers",
     "AccFgFingerprint": "xai4chem.featurizers",

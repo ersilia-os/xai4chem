@@ -7,6 +7,7 @@ A model fitted with them should show that disagreement in its "experiments" and 
     python make_qed_teacher.py            # writes data/erl0_qed.csv and data/hard_qed.csv
 """
 
+import os
 from multiprocessing import get_context
 from pathlib import Path
 
@@ -34,13 +35,13 @@ def qed_chunk(smiles):
 def main():
     from rdkit import Chem
 
-    from xai4chem.library import ReferenceLibrary, default_n_jobs
+    from xai4chem import ReferenceLibrary
 
     out = Path(__file__).parent / "data"
     out.mkdir(exist_ok=True)
     smiles = ReferenceLibrary().smiles
     chunks = [smiles[i : i + 5000] for i in range(0, len(smiles), 5000)]
-    with get_context("spawn").Pool(default_n_jobs()) as pool:
+    with get_context("spawn").Pool(max(1, min(8, (os.cpu_count() or 2) - 1))) as pool:
         qed = [v for part in pool.imap(qed_chunk, chunks) for v in part]
     pd.DataFrame({"smiles": smiles, "qed": qed}).to_csv(out / "erl0_qed.csv", index=False)
 

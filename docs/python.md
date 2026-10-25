@@ -1,13 +1,29 @@
 # Python API
 
-Everything the CLI does is available from Python. A model directory is loaded with `XAIModel`. Loading
+Each command is a function in `xai4chem.api`, also importable from `xai4chem`. The functions print
+nothing; pass `display=xai4chem.ui.console.ConsoleDisplay()` to see the CLI's progress output.
+
+```python
+import xai4chem
+
+smiles = ["CC(=O)Nc1ccc(O)cc1", "CC(C)Cc1ccc(cc1)C(C)C(=O)O"]
+xai4chem.setup()                                                  # as `xai4chem setup`
+xai4chem.fit("soft.csv", "models/my_model", hard_labels="hard.csv")
+out = xai4chem.explain("models/my_model", smiles, "explanations/") # predictions, attributions, gallery
+xai4chem.predict("models/my_model", smiles, "predictions.csv")
+```
+
+`fit` also takes `seed`, `transform`, `n_estimators` and `panel_rows`, which the CLI leaves at their
+defaults.
+
+A model directory is loaded with `XAIModel`. Loading
 re-scores the model's golden molecules and refuses to continue if this environment does not reproduce them.
 
 ```python
 from rdkit import Chem
 
 from xai4chem import XAIModel
-from xai4chem.reporting.drawing import atom_attributions
+from xai4chem.explain.atoms import atom_attributions
 
 model = XAIModel("models/my_model")
 model.column_names                       # teacher columns, e.g. ['qed', 'clogp']
@@ -54,26 +70,12 @@ The nearest reference-library molecule and the teacher's value for it (applicabi
 model.library_neighbours(smiles)   # {"T": ..., "smiles": [...], "teacher": {"qed": ...}}
 ```
 
-## Galleries, reports and training
+## The report
 
 ```python
-from xai4chem.reporting.molecules import explain_molecules
-from xai4chem.reporting.report import write_report
+from xai4chem.report.model_report import write_report
 
-explain_molecules(model, smiles, "explanations/")   # CSVs + index.html, as `xai4chem explain`
-write_report("models/my_model", "report.html")       # as `xai4chem report`
-```
-
-Training is a sequence of functions, the same ones `xai4chem fit` calls:
-
-```python
-from xai4chem.hard import learn_hard
-from xai4chem.reporting.global_explain import explain_global
-from xai4chem.soft import learn_soft
-
-learn_soft("soft.csv", "models/my_model", featurizer_name="morgan")
-learn_hard("hard.csv", "models/my_model")
-explain_global("models/my_model")
+write_report("models/my_model", "elsewhere.html")   # `fit` writes models/my_model/report.html
 ```
 
 ## The reference library

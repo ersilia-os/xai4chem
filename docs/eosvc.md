@@ -35,7 +35,7 @@ It accepts the first whose name and size match.
 Build once:
 
 ```bash
-xai4chem setup -f all --library-dir data/library     # ~30 min on 8 cores for the Ersilia library
+xai4chem setup -f all --library-dir data/library     # about 2.5 hours, once, for the Ersilia library
 eosvc upload --path data/library                     # needs the repository's access.json
 ```
 

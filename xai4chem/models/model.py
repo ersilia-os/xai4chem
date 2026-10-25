@@ -13,6 +13,7 @@ That decomposition is exact *given* ``a``. The gate itself is not attributed to 
 the nearest labelled analogue are reported alongside instead.
 """
 
+from contextlib import contextmanager
 from pathlib import Path
 
 import numpy as np
@@ -21,9 +22,12 @@ import scipy.sparse as sp
 import xgboost as xgb
 from rdkit import Chem, RDLogger
 
+from xai4chem.data.library import BitDictionary
+from xai4chem.data.similarity import binarize, fingerprints, nearest
 from xai4chem.featurizers import featurizer_from_config
-from xai4chem.hard import apply_isotonic, ramp
-from xai4chem.library import BitDictionary
+from xai4chem.models.hard import apply_isotonic, ramp
+from xai4chem.models.surrogate import contributions, inverse, predict_margin
+from xai4chem.progress import SILENT
 from xai4chem.run import (
     BIT_DICTIONARY_NAME,
     GOLDEN_NAME,
@@ -41,8 +45,6 @@ from xai4chem.run import (
     read_manifest,
     write_json,
 )
-from xai4chem.similarity import binarize, fingerprints, nearest
-from xai4chem.soft import contributions, inverse, predict_margin
 
 RDLogger.DisableLog("rdApp.*")
 
@@ -56,6 +58,11 @@ def _load_booster(path):
     booster = xgb.Booster()
     booster.load_model(str(path))
     return booster
+
+
+@contextmanager
+def _nothing():
+    yield lambda done: None
 
 
 def valid_mask(smiles):
@@ -101,7 +108,7 @@ class XAIModel(object):
     Parameters
     ----------
     model_dir : str or Path
-        A directory written by ``xai4chem fit`` (or ``learn-soft``).
+        A directory written by ``xai4chem fit``.
     check_golden : bool
         Re-score the stored golden molecules and refuse to load if this environment does not reproduce
         them. That, rather than a version pin, is the evidence that predictions here match training.
@@ -221,73 +228,60 @@ class XAIModel(object):
         return out
 
     def _library(self):
-        from xai4chem.library import library_for_model
+        from xai4chem.data.library import library_for_model
 
         try:
             return library_for_model(self.manifest)
-        except (FileNotFoundError, KeyError, OSError):
+        except (FileNotFoundError, KeyError, OSError, ValueError):
             return None
 
-    def features(self, smiles, n_jobs=None, fingerprints_too=False):
-        """Features (and validity) for many molecules, as fast as possible.
+    def features(self, smiles, fingerprints_too=False, display=SILENT):
+        """Features (and validity) for many molecules.
 
-        Large inputs reuse the reference library: molecules found there (exact or canonical SMILES) get
-        their precomputed rows, and only the rest are featurized, in worker processes. Returns
-        ``(X, valid, fps)``; ``fps`` (binary Morgan, for the gate) is ``None`` unless asked for.
+        Large inputs reuse the reference library: molecules found there (exact or canonical SMILES) get their
+        precomputed rows and only the rest are featurized. Returns ``(X, valid, fps)``; ``fps`` (binary Morgan,
+        for the gate) is ``None`` unless asked for.
         """
-        from xai4chem.library import _featurize_chunk, _imap, default_n_jobs
-        from xai4chem.soft import align_to_library, load_features
+        from xai4chem.data.features import align_to_library, featurize, load_features
 
         smiles = list(smiles)
-        n_jobs = n_jobs or default_n_jobs()
         library = self._library() if len(smiles) >= LIBRARY_THRESHOLD else None
         same = (
             library is not None
             and library.has(self.featurizer.name)
             and library.manifest["features"][self.featurizer.name]["config"] == self.featurizer.to_config()
         )
-        if same:
-            rows = align_to_library(smiles, library)
-            X = load_features(smiles, rows, library, self.featurizer, n_jobs=n_jobs)
-            valid = rows >= 0
-            missing = np.where(~valid)[0]
-            valid[missing] = valid_mask([smiles[i] for i in missing])
-            fps = None
-            if fingerprints_too:
-                if self.featurizer.name == "morgan":
-                    fps = binarize(X)
-                elif library.has("morgan"):
-                    fps = binarize(load_features(smiles, rows, library, library.featurizer("morgan"), n_jobs=n_jobs))
-            return X, valid, fps
-        cfg = self.featurizer.to_config()
-        chunks = [smiles[i : i + 5000] for i in range(0, len(smiles), 5000)]
-        blocks = []
-        for block in _imap(_featurize_chunk, ((cfg, c) for c in chunks), n_jobs if len(smiles) > 20000 else 1):
-            # Sparse featurizers are kept sparse chunk by chunk: a dense Morgan copy is 2 GB per million molecules
-            blocks.append(sp.csr_matrix(block, dtype=np.float32) if self.sparse else block)
-        if not blocks:
-            X = self.featurize([])
-        else:
-            X = sp.vstack(blocks, format="csr") if self.sparse else np.vstack(blocks)
-        return X, valid_mask(smiles), None
+        if not same:
+            return featurize(self.featurizer, smiles, display), valid_mask(smiles), None
+        rows = align_to_library(smiles, library)
+        X = load_features(smiles, rows, library, self.featurizer, display)
+        valid = rows >= 0
+        missing = np.where(~valid)[0]
+        valid[missing] = valid_mask([smiles[i] for i in missing])
+        fps = None
+        if fingerprints_too:
+            if self.featurizer.name == "morgan":
+                fps = binarize(X)
+            elif library.has("morgan"):
+                fps = binarize(load_features(smiles, rows, library, library.featurizer("morgan"), display))
+        return X, valid, fps
 
-    def scores(self, smiles, columns=None, batch_size=BATCH, progress=None, n_jobs=None):
-        """S, P (and H_S, T, a) on the model's scale per column, batched, without attributions.
+    def scores(self, smiles, columns=None, batch_size=BATCH, display=SILENT):
+        """S, P (and H_S, T, a) on the model's scale per column, without attributions.
 
-        Also returns, under the key ``"_valid"``, which SMILES could be parsed.
+        Also returns, under ``"_valid"``, which SMILES could be parsed.
         """
         smiles = list(smiles)
         cols = self._select(columns)
         need_fps = any(c.hard is not None for c in cols) and self.featurizer.name != "morgan"
-        X, valid, fps = self.features(smiles, n_jobs=n_jobs, fingerprints_too=need_fps)
-        parts, done = [], 0
-        for start in range(0, len(smiles), batch_size):
-            stop = min(start + batch_size, len(smiles))
-            batch_fps = fps[start:stop] if fps is not None else None
-            parts.append(self._margins_batch(smiles[start:stop], cols, X=X[start:stop], fps=batch_fps))
-            done = stop
-            if progress is not None:
-                progress(done)
+        X, valid, fps = self.features(smiles, fingerprints_too=need_fps, display=display)
+        parts = []
+        with display.loop("scoring", len(smiles)) if len(smiles) > batch_size else _nothing() as tick:
+            for start in range(0, len(smiles), batch_size):
+                stop = min(start + batch_size, len(smiles))
+                batch_fps = fps[start:stop] if fps is not None else None
+                parts.append(self._margins_batch(smiles[start:stop], cols, X=X[start:stop], fps=batch_fps))
+                tick(stop)
         out = (
             {c.name: {k: np.concatenate([p[c.name][k] for p in parts]) for k in parts[0][c.name]} for c in cols}
             if parts
@@ -296,14 +290,14 @@ class XAIModel(object):
         out["_valid"] = valid
         return out
 
-    def predict(self, smiles, columns=None, details=False, batch_size=BATCH, progress=None, n_jobs=None):
+    def predict(self, smiles, columns=None, details=False, batch_size=BATCH, display=SILENT):
         """One row per molecule: P on the teacher's scale per column (NaN for unparseable SMILES).
 
         With ``details``, also S and H_S (on the teacher's scale), T and a. No attributions are computed,
         so this path is cheap enough for millions of molecules.
         """
         smiles = list(smiles)
-        res = self.scores(smiles, columns=columns, batch_size=batch_size, progress=progress, n_jobs=n_jobs)
+        res = self.scores(smiles, columns=columns, batch_size=batch_size, display=display)
         df = pd.DataFrame({"smiles": smiles})
         for col in self._select(columns):
             r = res[col.name]
@@ -328,8 +322,8 @@ class XAIModel(object):
         """
         import h5py
 
+        from xai4chem.data.similarity import nearest_large
         from xai4chem.run import TARGETS_NAME
-        from xai4chem.similarity import nearest_large
 
         library = self._library()
         if library is None or not library.has("morgan"):
@@ -356,7 +350,7 @@ class XAIModel(object):
 
     def _check_golden(self):
         golden = read_json(self.dir / GOLDEN_NAME)
-        res = self.explain(golden["smiles"])
+        res = self.scores(golden["smiles"])
         for name, expected in golden["columns"].items():
             got = res[name]["P"]
             if not np.allclose(got, expected["P"], atol=GOLDEN_TOL):
@@ -369,7 +363,8 @@ class XAIModel(object):
 def write_golden(model_dir):
     model = XAIModel(model_dir, check_golden=False)
     smiles = model.manifest["golden_smiles"]
-    res = model.explain(smiles)
+    res = model.scores(smiles)
+    res.pop("_valid")
     write_json(
         Path(model_dir) / GOLDEN_NAME,
         {"smiles": smiles, "columns": {name: {"S": r["S"].tolist(), "P": r["P"].tolist()} for name, r in res.items()}},

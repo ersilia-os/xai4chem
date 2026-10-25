@@ -2,7 +2,7 @@
 
     <model-dir>/
       manifest.json         featurizer config, library location, one entry per teacher column
-      targets.h5            the (transformed) soft labels, with their library rows; used by learn-hard
+      targets.h5            the (transformed) soft labels, with their library rows (for the applicability check)
       bit_dictionary.json   copied from the library, so Morgan explanations are self-contained
       golden.json           a few molecules with expected outputs, re-checked when the model loads
       columns/<id>/
@@ -10,6 +10,7 @@
         _hard/  h.json  h_to_s.json  labelled.csv  labelled_fp.npz  hard_meta.json
                                                     H, its isotonic map, and the gate's labelled set
         explain/                            global explanations
+      report.html           the model report
 
 Columns get directory-safe ids (``c0``, ``c1``...) because teacher headers are user data; the real name
 lives in the manifest. As in Olinda, ``hard_meta.json`` is written last and marks a complete hard head.
@@ -34,6 +35,7 @@ H_TO_S_NAME = "h_to_s.json"
 LABELLED_NAME = "labelled.csv"
 LABELLED_FP_NAME = "labelled_fp.npz"
 HARD_META_NAME = "hard_meta.json"
+REPORT_NAME = "report.html"
 
 
 def column_id(index):

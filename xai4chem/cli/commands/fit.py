@@ -1,114 +1,52 @@
 import rich_click as click
 
 from xai4chem.cli import options
-from xai4chem.cli.commands._training import run_soft, soft_options
-
-QUICK_ROWS = 200_000
-QUICK_TREES = 500
-QUICK_EXPLAIN = 2000
 
 
 @click.command("fit")
-@soft_options
+@click.option(
+    "--soft-labels",
+    "-s",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False),
+    help="The teacher's outputs over the library: a `smiles` column plus one numeric column per output.",
+)
 @click.option(
     "--hard-labels",
     "-h",
     default=None,
     type=click.Path(exists=True, dir_okay=False),
-    help="Optional measurements: SMILES plus columns named like the soft-label columns.",
+    help="Optional measurements: a `smiles` column plus columns named like the soft-label columns.",
 )
-@options.smiles_column("--hard-smiles-column")
+@options.model_dir("Where to write the model.")
 @click.option(
-    "--hard-label-columns", default=None, help="Comma-separated measurement columns (default: every numeric column)."
-)
-@click.option(
-    "--explain-rows",
-    default=10000,
+    "--featurizer",
+    "-f",
+    default="morgan",
     show_default=True,
-    type=int,
-    help="Panel molecules for the global explanations (exact TreeSHAP costs a few ms each); 0 uses the whole panel.",
+    type=click.Choice(options.FEATURIZERS),
+    help="Features the surrogate learns from (must be prepared by `xai4chem setup`).",
 )
-@click.option("--report/--no-report", default=True, show_default=True, help="Write the HTML model report at the end.")
-@click.option("--force", is_flag=True, help="Overwrite an existing model directory.")
-@click.option(
-    "--quick",
-    is_flag=True,
-    help="Fast iteration preset: at most 200k soft labels, 500 trees, 2,000 panel molecules (fidelity drops).",
-)
+@options.library_dir()
+@click.option("--force", is_flag=True, help="Overwrite an existing model.")
 @options.friendly_errors
-def fit_cmd(hard_labels, hard_smiles_column, hard_label_columns, explain_rows, report, force, quick, **kwargs):
-    """Run the whole pipeline: learn-soft → (learn-hard) → explain-global → report.
+def fit_cmd(soft_labels, hard_labels, model_dir, featurizer, library_dir, force):
+    """Learn an explainable surrogate of a teacher model, and refine it with measurements if given.
 
-    The model directory holds everything `explain`, `predict` and `report` need.
+    Writes the model directory, with global explanations and `report.html`.
     """
-    import shutil
-    import time
-    from pathlib import Path
+    from xai4chem import api
+    from xai4chem.models.hard import metric_text
 
-    from xai4chem.console import STEP_COLORS, echo, elapsed, rule, summary_panel
-    from xai4chem.console import path as cpath
-
-    started = time.time()
-    if quick:
-        kwargs["max_rows"] = min(kwargs["max_rows"] or QUICK_ROWS, QUICK_ROWS)
-        kwargs["n_estimators"] = min(kwargs["n_estimators"], QUICK_TREES)
-        explain_rows = min(explain_rows or QUICK_EXPLAIN, QUICK_EXPLAIN)
-    model_dir = Path(kwargs["model_dir"])
-    if (model_dir / "manifest.json").exists():
-        if not force:
-            raise click.ClickException(f"{model_dir} already holds a model. Pass --force to overwrite it.")
-        shutil.rmtree(model_dir)
-    if hard_labels:
-        # Fail on a column mismatch now, not after minutes of learn-soft
-        from xai4chem.io import match_hard_columns, read_labels
-
-        _, soft_y = read_labels(
-            kwargs["soft_labels"],
-            smiles_col=kwargs["soft_smiles_column"],
-            label_cols=options.split(kwargs["soft_label_columns"]),
-            flag="--soft-smiles-column",
-        )
-        _, hard_y = read_labels(
-            hard_labels,
-            smiles_col=hard_smiles_column,
-            label_cols=options.split(hard_label_columns),
-            flag="--hard-smiles-column",
-        )
-        from xai4chem.soft import MIN_SOFT_ROWS
-
-        trainable = [str(c) for c in soft_y.columns if soft_y[c].notna().sum() >= MIN_SOFT_ROWS]
-        if not match_hard_columns(trainable, [str(c) for c in hard_y.columns], strict=False):
-            raise click.ClickException(
-                f"No column of {hard_labels} ({', '.join(map(str, hard_y.columns))}) matches a soft-label column "
-                f"({', '.join(map(str, soft_y.columns))}). Names must match exactly (case included) or as a prefix; "
-                "--hard-label-columns selects columns."
-            )
-    rule("xai4chem · fit", style=STEP_COLORS["fit"], right=cpath(model_dir))
-    pipeline = (
-        ["learn-soft"] + (["learn-hard"] if hard_labels else []) + ["explain-global"] + (["report"] if report else [])
-    )
-    echo(" → ".join(pipeline) + (" · [yellow]quick preset[/]" if quick else ""), "run")
-    run_soft(**kwargs)
-    if hard_labels:
-        from xai4chem.hard import learn_hard
-
-        learn_hard(
-            hard_labels,
-            model_dir,
-            library_dir=kwargs["library_dir"],
-            seed=kwargs["seed"],
-            smiles_col=hard_smiles_column,
-            label_cols=options.split(hard_label_columns),
-        )
-    from xai4chem.reporting.global_explain import explain_global
-
-    explain_global(model_dir, library_dir=kwargs["library_dir"], max_rows=explain_rows, seed=kwargs["seed"])
-    rows = [("Pipeline", " → ".join(pipeline)), ("Model", f"[dim]{cpath(model_dir)}[/]")]
-    if report:
-        from xai4chem.reporting.report import write_report
-
-        out = write_report(model_dir, model_dir / "report.html")
-        rows.append(("Report", f"[dim]{cpath(out)}[/]"))
-    rows.append(("Next", f"xai4chem explain -m {cpath(model_dir)} -i molecules.csv -o explanations/"))
-    rows.append(("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]"))
-    summary_panel("xai4chem · fit", rows, border_style=STEP_COLORS["fit"], icon="✓")
+    display, started = options.begin("fit", f"{soft_labels}" + (f" + {hard_labels}" if hard_labels else ""))
+    out = api.fit(soft_labels, model_dir, hard_labels, featurizer, library_dir, force=force, display=display)
+    rows = []
+    for s in out["columns"]:
+        line = f"R² {s['fidelity']['r2']:.3f} · ρ {s['fidelity']['spearman']:.3f}"
+        if s.get("hard"):
+            h = s["hard"]
+            line += f" · H {metric_text(h['heldout'])} · a_max {h['a_max']:.2f} · reach {h['reach']:.0%}"
+        rows.append((s["name"], line))
+    rows += [("Model", options.shown(out["model_dir"])), ("Report", options.shown(out["report"]))]
+    rows.append(("Next", f"xai4chem explain -m {model_dir} -i molecules.csv"))
+    options.finish("fit", rows, started)

@@ -1,8 +1,7 @@
-"""Molecule drawings: attributions mapped onto atoms, rendered with RDKit (SVG for pages, PNG for files)."""
+"""Molecule drawings for the HTML pages: atoms tinted by attribution, and small substructure drawings (RDKit SVG)."""
 
-import numpy as np
 from rdkit import Chem, RDLogger
-from rdkit.Chem import AllChem, Draw, rdDepictor
+from rdkit.Chem import AllChem, rdDepictor
 from rdkit.Chem.Draw import rdMolDraw2D
 
 RDLogger.DisableLog("rdApp.*")
@@ -11,7 +10,6 @@ RDLogger.DisableLog("rdApp.*")
 POS = (0.902, 0.224, 0.275)
 NEG = (0.271, 0.482, 0.616)
 SVG_SIZE = 260
-PNG_SIZE = 400
 
 
 # RDKit draws in pure black and greys; map them onto the Ersilia ink tokens so drawings sit in the page
@@ -22,32 +20,6 @@ def _brand(svg):
     for old, new in _SVG_INK.items():
         svg = svg.replace(old, new)
     return svg
-
-
-def atom_attributions(featurizer, mol, phi_row):
-    """Distribute feature attributions onto atoms.
-
-    Each feature's value is split evenly over its occurrences in the molecule, and each occurrence's share
-    is split evenly over its atoms. So the atom scores sum exactly to the attribution of the features
-    present. What is left (``unmapped``) is the effect of features *absent* from the molecule, which
-    TreeSHAP also scores but which has no atoms to sit on. Returns ``None`` for featurizers whose features
-    do not map to atoms.
-    """
-    groups = featurizer.atom_groups(mol)
-    if groups is None:
-        return None
-    scores = np.zeros(mol.GetNumAtoms())
-    mapped = 0.0
-    for f, occurrences in groups.items():
-        v = float(phi_row[f])
-        if v == 0 or not occurrences:
-            continue
-        share = v / len(occurrences)
-        for atoms in occurrences:
-            for a in atoms:
-                scores[a] += share / len(atoms)
-        mapped += v
-    return scores, float(phi_row.sum()) - mapped
 
 
 def _color(s, vmax):
@@ -104,30 +76,6 @@ def plain_svg(mol, size=SVG_SIZE):
     return _brand(svg[svg.index("<svg") :])
 
 
-def atom_png(mol, panels, output_path, vmax):
-    """Several views of one molecule side by side (``panels`` = [(legend, scores)]), as a PNG file."""
-    n = len(panels)
-    drawer = rdMolDraw2D.MolDraw2DCairo(PNG_SIZE * n, PNG_SIZE, PNG_SIZE, PNG_SIZE)
-    drawer.drawOptions().useBWAtomPalette()
-    hl_atoms, hl_atom_cols, hl_bonds, hl_bond_cols = [], [], [], []
-    for _, scores in panels:
-        ac, bc = _highlights(mol, scores, vmax)
-        hl_atoms.append(list(ac))
-        hl_atom_cols.append(ac)
-        hl_bonds.append(list(bc))
-        hl_bond_cols.append(bc)
-    drawer.DrawMolecules(
-        [mol] * n,
-        highlightAtoms=hl_atoms,
-        highlightAtomColors=hl_atom_cols,
-        highlightBonds=hl_bonds,
-        highlightBondColors=hl_bond_cols,
-        legends=[legend for legend, _ in panels],
-    )
-    drawer.FinishDrawing()
-    drawer.WriteDrawingText(str(output_path))
-
-
 def fragment_svg(smiles_or_smarts, size=150, smarts=False):
     """A small drawing of a substructure; empty for single atoms, whose label already says it all."""
     if not smarts and ";" in smiles_or_smarts:
@@ -150,6 +98,3 @@ def fragment_svg(smiles_or_smarts, size=150, smarts=False):
     drawer.FinishDrawing()
     svg = drawer.GetDrawingText()
     return _brand(svg[svg.index("<svg") :])
-
-
-__all__ = ["atom_attributions", "atom_svg", "plain_svg", "atom_png", "fragment_svg", "prepare", "Draw"]

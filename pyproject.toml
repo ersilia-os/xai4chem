@@ -7,7 +7,7 @@ license = "GPL-3.0-only"
 readme = "README.md"
 repository = "https://github.com/ersilia-os/xai4chem"
 keywords = ["explainable-ai", "drug-discovery", "cheminformatics", "model-distillation", "ersilia"]
-include = ["xai4chem/reporting/assets/*.css", "xai4chem/tools/accfg/*.csv"]
+include = ["xai4chem/report/assets/*.css", "xai4chem/tools/accfg/*.csv"]
 
 # Pinned exactly (Ersilia house rule). Models carry golden vectors that are re-scored on load, so a
 # drifting dependency that changes predictions is caught rather than silently trusted.
@@ -21,14 +21,10 @@ xgboost       = "2.0.0"
 h5py          = "3.16.0"
 rdkit         = "2024.3.6"
 datamol       = "0.12.5"
-matplotlib    = "3.10.8"
-stylia        = "1.0.1"
 click         = "8.4.2"
 rich          = "14.1.0"
 rich-click    = "1.9.8"
 loguru        = "0.7.3"
-psutil        = "7.0.0"
-optuna        = "4.4.0"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "*"

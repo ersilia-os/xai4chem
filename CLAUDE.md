@@ -26,20 +26,20 @@ This guide covers what is non-obvious about working here. The Ersilia house rule
 
 ## Layout
 
+Computation never prints. Long functions take a `display` (`xai4chem/progress.py`: `step`, `note`,
+`loop`, `table`); the default does nothing, and the CLI passes `ui.console.ConsoleDisplay`.
+
 | | |
 |---|---|
-| `xai4chem/cli/` | `create_cli.py` + one module per command in `commands/` (rich-click) |
+| `xai4chem/api.py` | `setup`, `fit`, `explain`, `predict`: the four entry points, plain Python |
+| `xai4chem/cli/` | `create_cli.py`, `options.py` (shared options, rule and panel) and one thin module per command |
+| `xai4chem/data/` | `io` (tables, SMILES/id columns, hard→soft matching), `library` (read-only `ReferenceLibrary`), `build` (setting a library up), `features` (library rows or featurization), `similarity` (Tanimoto) |
+| `xai4chem/models/` | `surrogate` (S), `hard` (H, isotonic map, gate), `model` (`XAIModel`: load, golden check, scores, explain) |
+| `xai4chem/explain/` | `panel` (global statistics), `tables` (prediction/attribution rows, two-molecule comparison), `atoms` |
+| `xai4chem/report/` | `model_report`, `gallery`, `svg` (the report's charts), `drawing` (RDKit), `html` |
+| `xai4chem/ui/` | `console` (Olinda's look), `render` (terminal tables), `log` (loguru, named so it never shadows the stdlib) |
 | `xai4chem/featurizers/` | morgan (Olinda-identical), accfg, datamol; one shared interface (see its `__init__`) |
-| `xai4chem/library.py` | reference library: setup, `library.json`, row-aligned matrices, CSR reads, bit dictionary |
-| `xai4chem/soft.py` / `hard.py` | learn-soft and learn-hard |
-| `xai4chem/tune.py` | optional Optuna search (`--tune`) on a subsample |
-| `xai4chem/io.py` | reading tables, SMILES-column detection and validation, hard→soft column matching |
-| `xai4chem/info.py` / `validate.py` | the `info` and `validate` commands |
-| `xai4chem/model.py` | `XAIModel`: loading, `explain`, `scores`, `predict`, golden vectors |
-| `xai4chem/similarity.py` | sparse-matrix Tanimoto nearest neighbours |
-| `xai4chem/reporting/` | global explanations (with chemotypes), molecule gallery, `compare`, model report, stylia figures, RDKit drawings, HTML |
-| `xai4chem/console.py` | user-facing output (ported from Olinda) |
-| `xai4chem/log.py` | the loguru logger (named `log`, not `logging`, so it never shadows the stdlib) |
+| `xai4chem/run.py` | the model directory's layout |
 | `xai4chem/tools/accfg/` | vendored AccFG, excluded from ruff; leave it as published |
 
 ## The lazy-import contract
@@ -51,44 +51,41 @@ subprocess. The package `__init__` is lazy too (`__getattr__`).
 
 ## Output: console vs logger
 
-- `xai4chem/console.py` is everything a user reads:
-  - `rule`, `echo`, `stage`, `summary_panel`
-  - `sweep_progress` for passes over many molecules
-  - `LiveTable` for per-column work
-- `xai4chem/log.py` is diagnostics. The handler sits at WARNING, so `logger.info` prints nothing unless
+- A command prints exactly one rule (`options.begin`) and one summary panel (`options.finish`). In between
+  come `▪ Step i/N` lines, short notes, live tables for per-column work and one repainting status line for
+  long loops (25% milestones when piped, nothing for loops under a second). Never print one line per chunk.
+- Notes and table cells are escaped by `ConsoleDisplay`: column names and bit labels such as `[cH;D2;R]`
+  are user data, not rich markup.
+- `xai4chem/ui/log.py` is diagnostics. The handler sits at WARNING, so `logger.info` prints nothing unless
   `--verbose`. Never route user-facing status through the logger.
-
-Each command themes itself with its colour from `STEP_COLORS` and ends with a `summary_panel`. Long
-passes go through `sweep_progress`, which repaints one line on a terminal and prints 25% milestones when
-piped. Never print one line per chunk.
 
 ## Speed: decisions that matter
 
 - **Sparse features.**
   - Morgan and AccFG are handed to XGBoost as CSR, and implicit zeros are *missing*. Anything that builds
-    a DMatrix must go through `soft.dmatrix`/`to_model_input`, or a dense zero becomes a value and
+    a DMatrix must go through `surrogate.dmatrix`/`to_model_input`, or a dense zero becomes a value and
     predictions change.
   - Datamol is dense.
 - **Library reads.**
   - `ReferenceLibrary.csr` reads in 100k-row chunks.
   - Large row selections use contiguous chunk reads, never h5py point selection.
-- **Threads.** `soft.n_threads` scales with data size. Small fits are slower with all cores.
+- **Threads.** XGBoost's own threads are the only parallelism; `surrogate.n_threads` scales them with data
+  size. Everything else is sequential: no process or thread pools.
 - **Trimming.** Boosters are trimmed to their best iteration after early stopping.
 - **Validation split.** It is a plain `xgb.DMatrix`, never a `QuantileDMatrix`. XGBoost 2.0 does not cache
   eval predictions for the latter, which made training 20× slower (measured).
 - **Library reuse at inference.** `XAIModel.features` reads precomputed library rows for inputs of ≥50k
-  molecules (exact or canonical SMILES match, featurizer configs identical) and featurizes only the rest,
-  in workers.
+  molecules (exact or canonical SMILES match, featurizer configs identical) and featurizes only the rest.
 - **Nearest-neighbour search.**
   - `similarity.nearest` (the gate) uses dense BLAS, because intersections are ~100% nonzero.
-  - `nearest_large` (applicability against the whole library) uses threaded sparse × dense products,
-    reduced per block.
+  - `nearest_large` (`explain --domain`, against the whole library) uses sparse × dense products, reduced
+    per block.
   - Both are tested against RDKit and against each other.
   - The library's binary fingerprints are cached as `morgan_bits_*.npy` by `setup`.
-- **Batching.** `XAIModel.explain` is dense (n × features). Batch it; `predict`/`scores` skip attributions
-  for large inputs.
-- **stylia.** It must be imported through `reporting.figures.import_stylia()`. stylia 1.0.1 wipes
-  matplotlib's font cache at import, which costs ~12 s per run otherwise.
+- **Batching.** `XAIModel.explain` is dense (n × features). Batch it; `predict`/`scores` skip attributions.
+- **Cheap defaults.** TreeSHAP costs ~5 ms per molecule on a full-library S, so global explanations use
+  2,000 panel molecules and at most 2,000 labelled ones. H uses one stratified held-out split, the
+  isotonic map 50k library rows, and the golden check `scores()` (no TreeSHAP).
 
 ## Explanations: details that matter
 
@@ -120,7 +117,8 @@ piped. Never print one line per chunk.
 - ruff: canonical Ersilia config, at line length 120 (deviation documented in `ruff.toml`). Both
   `ruff check` and `ruff format` must pass.
 - Docstrings follow the NumPy convention. `D101`/`D102` are enforced. Say *why*, not what.
-- Figures use stylia (`reporting/figures.py`; `ax` in, caller owns the figure). HTML uses the vendored
-  Ersilia design system (`reporting/assets/ersilia.css`), with every page self-contained.
+- The report's charts are small inline SVGs (`report/svg.py`) in the Ersilia palette; no plotting library.
+  HTML uses the vendored Ersilia design system (`report/assets/ersilia.css`), with every page
+  self-contained and free of scripts.
 - Dependencies are pinned exactly in `pyproject.toml`.
 - Tests smoke-test the CLI and the maths on a ~1,000-molecule synthetic library. Keep the suite fast.

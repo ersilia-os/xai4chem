@@ -1,6 +1,7 @@
-"""Options declared identically by several commands, and the error handling every command shares."""
+"""What the four commands share: common options, reading molecules, error handling, and the rule and panel."""
 
 import functools
+import time
 
 import rich_click as click
 
@@ -16,29 +17,45 @@ def library_dir():
         "--library-dir",
         default=None,
         type=click.Path(file_okay=False),
-        help="Reference library directory (default: the one used at training, else ~/.xai4chem/library).",
+        help="Reference library directory (default: ~/.xai4chem/library).",
     )
 
 
-def seed():
-    return click.option("--seed", default=42, show_default=True, type=int, help="Random seed.")
+def molecules_input(verb):
+    """``--input`` (a table) or ``--smiles`` (repeatable), one of the two."""
+
+    def decorator(func):
+        func = click.option(
+            "--smiles", "-S", "smiles_list", multiple=True, help=f"A SMILES to {verb} (repeatable), instead of --input."
+        )(func)
+        func = click.option(
+            "--input",
+            "-i",
+            "input_file",
+            default=None,
+            type=click.Path(exists=True, dir_okay=False),
+            help=f"Molecules to {verb}: a CSV/TSV/Parquet with a `smiles` column (and optionally an `id` column).",
+        )(func)
+        return func
+
+    return decorator
 
 
-def columns():
-    return click.option("--columns", "-c", default=None, help="Comma-separated model columns to use (default: all).")
+def load_molecules(input_file, smiles_list):
+    """``(smiles, ids)`` from ``--input`` or ``--smiles``; ids come from an id/name/key column when there is one."""
+    if input_file and smiles_list:
+        raise click.ClickException("Pass --input or --smiles, not both.")
+    if not input_file and not smiles_list:
+        raise click.ClickException("Pass the molecules with --input (a file) or --smiles (repeatable).")
+    if smiles_list:
+        return list(smiles_list), None
+    from xai4chem.data.io import check_smiles_column, id_column, read_table, smiles_column
 
-
-def smiles_column(flag="--smiles-column"):
-    return click.option(
-        flag, default=None, help="Name of the SMILES column (default: `smiles`/`input`, else the first column)."
-    )
-
-
-def split(value):
-    if value is None:
-        return None
-    names = [v.strip() for v in str(value).split(",") if v.strip()]
-    return names or None
+    df = read_table(input_file)
+    sc = smiles_column(df)
+    check_smiles_column(df, sc, input_file)
+    ic = id_column(df, sc)
+    return df[sc].astype(str).tolist(), (df[ic].astype(str).tolist() if ic is not None else None)
 
 
 def friendly_errors(func):
@@ -55,43 +72,32 @@ def friendly_errors(func):
     return wrapper
 
 
-def molecules_input(verb):
-    """``--input`` (a table) or ``--smiles`` (repeatable), one of the two."""
-
-    def decorator(func):
-        func = click.option(
-            "--smiles", "-S", "smiles_list", multiple=True, help=f"A SMILES to {verb} (repeatable), instead of --input."
-        )(func)
-        func = click.option(
-            "--input",
-            "-i",
-            "input_file",
-            default=None,
-            type=click.Path(exists=True, dir_okay=False),
-            help=f"Molecules to {verb}: a CSV/TSV/Parquet with a SMILES column.",
-        )(func)
-        return func
-
-    return decorator
+def plural(n, word):
+    return f"{n:,} {word}{'' if n == 1 else 's'}"
 
 
-def load_molecules(input_file, smiles_list, smiles_col=None, id_col=None):
-    """(smiles, ids) from ``--input`` or ``--smiles``."""
-    if input_file and smiles_list:
-        raise click.ClickException("Pass --input or --smiles, not both.")
-    if not input_file and not smiles_list:
-        raise click.ClickException("Pass the molecules with --input (a file) or --smiles (repeatable).")
-    if smiles_list:
-        return list(smiles_list), None
-    from xai4chem.io import check_smiles_column, read_table, smiles_column
+def shown(path):
+    """A path for the summary panel: shortened, escaped, dimmed."""
+    from rich.markup import escape
 
-    df = read_table(input_file)
-    sc = smiles_column(df, smiles_col)
-    try:
-        check_smiles_column(df, sc, input_file)
-    except ValueError as exc:
-        raise click.ClickException(str(exc)) from exc
-    smiles = df[sc].astype(str).tolist()
-    if id_col is not None and id_col not in df.columns:
-        raise click.ClickException(f"--id-column {id_col!r} not found. Columns: {list(df.columns)}")
-    return smiles, (df[id_col].astype(str).tolist() if id_col else None)
+    from xai4chem.ui.console import path as short
+
+    return f"[dim]{escape(short(path))}[/]"
+
+
+def begin(command, right=None):
+    """The command's rule; returns the display its steps report to."""
+    from rich.markup import escape
+
+    from xai4chem.ui.console import STEP_COLORS, ConsoleDisplay, rule
+
+    rule(f"xai4chem · {command}", style=STEP_COLORS[command], right=escape(right) if right else None)
+    return ConsoleDisplay(STEP_COLORS[command]), time.time()
+
+
+def finish(command, rows, started):
+    """The command's summary panel."""
+    from xai4chem.ui.console import STEP_COLORS, elapsed, summary_panel
+
+    rows = list(rows) + [("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]")]
+    summary_panel(f"xai4chem · {command}", rows, border_style=STEP_COLORS[command], icon="✓")

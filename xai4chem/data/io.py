@@ -14,6 +14,7 @@ Follows Olinda's conventions, so the same files work for both tools:
 from pathlib import Path
 
 SMILES_NAMES = ("smiles", "input")
+ID_NAMES = ("id", "name", "key", "compound_id", "molecule")
 HARD_SEPARATORS = ("_", "-")
 
 
@@ -40,7 +41,15 @@ def smiles_column(df, name=None):
     return df.columns[0]
 
 
-def check_smiles_column(df, column, path, flag="--smiles-column"):
+def id_column(df, smiles_col):
+    """A column naming each molecule (``id``, ``name``, ``key``…), or ``None``."""
+    for c in df.columns:
+        if c != smiles_col and str(c).strip().lower() in ID_NAMES:
+            return c
+    return None
+
+
+def check_smiles_column(df, column, path, flag=None):
     """Refuse a "SMILES" column that is not SMILES (e.g. an id column picked as the first column)."""
     from rdkit import Chem, RDLogger
 
@@ -50,8 +59,8 @@ def check_smiles_column(df, column, path, flag="--smiles-column"):
     ok = sum(Chem.MolFromSmiles(v) is not None for v in sample)
     if len(sample) and ok / len(sample) < 0.5:
         raise ValueError(
-            f"Column {column!r} of {path} does not look like SMILES ({ok}/{len(sample)} parse). Name a `smiles` or "
-            f"`input` column, or pass {flag}. Columns: {list(df.columns)}"
+            f"Column {column!r} of {path} does not look like SMILES ({ok}/{len(sample)} parse). Name it `smiles` or "
+            f"`input`{f', or pass {flag}' if flag else ''}. Columns: {list(df.columns)}"
         )
 
 
@@ -62,7 +71,7 @@ def read_smiles(path, column=None):
     return df[sc].astype(str).tolist()
 
 
-def read_labels(path, smiles_col=None, label_cols=None, flag="--smiles-column"):
+def read_labels(path, smiles_col=None, label_cols=None, flag=None):
     """A labels table → (SMILES list, DataFrame of numeric label columns)."""
     import pandas as pd
 

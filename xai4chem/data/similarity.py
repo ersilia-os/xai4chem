@@ -17,6 +17,7 @@ import scipy.sparse as sp
 from xai4chem.featurizers.morgan import morgan_featurizer
 
 BLOCK_CELLS = 20_000_000
+LIBRARY_BLOCK = 200_000
 DENSE_REFERENCE_BYTES = 600_000_000
 
 
@@ -62,48 +63,38 @@ def nearest(queries, reference):
     return T, idx
 
 
-def nearest_large(queries, reference, block=64, threads=None):
+def nearest_large(queries, reference, block=64):
     """:func:`nearest` against a very large reference (the whole library), as reference × queries.
 
-    The library is split into row blocks that threads multiply by a small dense block of queries (scipy
-    releases the GIL there, ~3x faster on 10 cores), and each thread reduces its block to a per-query
-    maximum, so the full library × queries matrix never exists.
+    A sparse library times a small dense block of queries is cheap (about 1 s per 100 queries against 1.36M
+    molecules); transposing or densifying the library is not. Blocks of the library are reduced one at a time,
+    so the full library × queries matrix never exists.
     """
-    import os
-    from concurrent.futures import ThreadPoolExecutor
-
     Q = binarize(queries)
-    already_binary = sp.issparse(reference) and reference.format == "csr" and reference.dtype == np.float32
-    R = reference if already_binary and (reference.nnz == 0 or reference.data.max() <= 1) else binarize(reference)
-    threads = threads or min(8, os.cpu_count() or 1)
-    bounds = np.linspace(0, R.shape[0], 2 * threads + 1).astype(int)
-    parts = [
-        (R[a:b], np.asarray(R[a:b].sum(1), dtype=np.float32).ravel(), a)
-        for a, b in zip(bounds[:-1], bounds[1:])
-        if b > a
-    ]
+    R = reference if _is_binary_csr(reference) else binarize(reference)
     T = np.zeros(Q.shape[0], dtype=np.float32)
     idx = np.full(Q.shape[0], -1, dtype=np.int64)
-
-    def best(part, Qd, q_pop):
-        Rb, r_pop, offset = part
-        inter = np.asarray(Rb @ Qd, dtype=np.float32)
-        union = r_pop[:, None] + q_pop[None, :]
-        union -= inter
-        np.divide(inter, union, out=inter, where=union > 0)
-        inter[union <= 0] = 0.0
-        j = inter.argmax(0)
-        return inter[j, np.arange(inter.shape[1])], j + offset
-
-    with ThreadPoolExecutor(threads) as pool:
-        for start in range(0, Q.shape[0], block):
-            Qd = Q[start : start + block].toarray().T
-            q_pop = Qd.sum(0)
-            results = list(pool.map(lambda part: best(part, Qd, q_pop), parts))
-            sims = np.stack([r[0] for r in results])
-            rows = np.stack([r[1] for r in results])
-            k = sims.argmax(0)
-            cols = np.arange(sims.shape[1])
-            T[start : start + block] = sims[k, cols]
-            idx[start : start + block] = rows[k, cols]
+    bounds = list(range(0, R.shape[0], LIBRARY_BLOCK)) + [R.shape[0]]
+    parts = [(R[a:b], np.asarray(R[a:b].sum(1), dtype=np.float32).ravel(), a) for a, b in zip(bounds[:-1], bounds[1:])]
+    for start in range(0, Q.shape[0], block):
+        Qd = Q[start : start + block].toarray().T
+        q_pop = Qd.sum(0)
+        best = np.full(Qd.shape[1], -1.0, dtype=np.float32)
+        where = np.full(Qd.shape[1], -1, dtype=np.int64)
+        for Rb, r_pop, offset in parts:
+            inter = np.asarray(Rb @ Qd, dtype=np.float32)
+            union = r_pop[:, None] + q_pop[None, :]
+            union -= inter
+            np.divide(inter, union, out=inter, where=union > 0)
+            inter[union <= 0] = 0.0
+            j = inter.argmax(0)
+            sims = inter[j, np.arange(inter.shape[1])]
+            better = sims > best
+            best[better], where[better] = sims[better], j[better] + offset
+        T[start : start + block] = best
+        idx[start : start + block] = where
     return T, idx
+
+
+def _is_binary_csr(X):
+    return sp.issparse(X) and X.format == "csr" and X.dtype == np.float32 and (X.nnz == 0 or X.data.max() <= 1)

@@ -8,7 +8,7 @@ Ersilia's 1.36M-molecule reference library, and treats measurements as an option
 |---|---|
 | `xai4chem explain_global -i data.csv -o out -r morgan` | `xai4chem fit -s soft.csv -m models/x -f morgan` (soft labels from a teacher), optionally `-h measurements.csv` |
 | `xai4chem explain_mols -i mols.csv -m model.pkl -o out` | `xai4chem explain -m models/x -i mols.csv -o out` |
-| `Regressor(...).fit(X, y)` | `xai4chem.soft.learn_soft(...)`, or `xai4chem fit` |
+| `Regressor(...).fit(X, y)` | `xai4chem.fit(...)`, or `xai4chem fit` |
 | `--representation datamol\|morgan\|accfg` | `--featurizer morgan\|accfg\|datamol` |
 | `model_<rep>.pkl` (joblib) | a model directory: XGBoost JSON boosters, JSON metadata, golden vectors |
 | SHAP via the `shap` package | exact TreeSHAP from XGBoost (`pred_contribs`); `shap` is no longer a dependency |

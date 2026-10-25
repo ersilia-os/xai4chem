@@ -9,38 +9,19 @@ from xai4chem.cli import options
 @click.option(
     "--output", "-o", default="predictions.csv", show_default=True, type=click.Path(dir_okay=False), help="Output CSV."
 )
-@options.columns()
-@options.smiles_column()
-@click.option("--details", is_flag=True, help="Also write S, H_S, T and a per column.")
-@click.option(
-    "--n-jobs", "-j", default=None, type=int, help="Worker processes for featurization (default: CPUs − 1, at most 8)."
-)
 @options.friendly_errors
-def predict_cmd(model_dir, input_file, smiles_list, output, columns, smiles_column, details, n_jobs):
+def predict_cmd(model_dir, input_file, smiles_list, output):
     """Score molecules fast, without explanations (millions of molecules are fine)."""
-    import time
+    from xai4chem import api
+    from xai4chem.models.model import XAIModel
 
-    from xai4chem.console import STEP_COLORS, elapsed, rule, set_active_color, summary_panel, sweep_progress
-    from xai4chem.console import path as cpath
-    from xai4chem.model import XAIModel
-
-    started = time.time()
-    color = STEP_COLORS["predict"]
-    set_active_color(color)
-    smiles, _ = options.load_molecules(input_file, smiles_list, smiles_column)
-    model = XAIModel(model_dir)
-    rule(
-        "xai4chem · predict",
-        style=color,
-        right=f"{len(smiles):,} molecule{'' if len(smiles) == 1 else 's'} · {cpath(model_dir)}",
-    )
-    with sweep_progress("scoring", len(smiles)) as tick:
-        out = model.predict(smiles, columns=options.split(columns), details=details, progress=tick, n_jobs=n_jobs)
-    out.to_csv(output, index=False)
-    n_bad = int((~out["valid"]).sum())
+    smiles, _ = options.load_molecules(input_file, smiles_list)
+    display, started = options.begin("predict", f"{options.plural(len(smiles), 'molecule')} · {model_dir}")
+    out = api.predict(XAIModel(model_dir), smiles, output, display=display)
+    bad = int((~out["valid"]).sum())
     rows = [
-        ("Molecules", f"{len(smiles):,}" + (f" · {n_bad:,} unparseable" if n_bad else "")),
-        ("Output", f"[dim]{cpath(output)}[/]"),
+        ("Molecules", f"{len(smiles):,}" + (f" · {bad:,} unparseable" if bad else "")),
+        ("Columns", ", ".join(c for c in out.columns if c not in ("smiles", "valid"))),
+        ("Output", options.shown(output)),
     ]
-    rows.append(("Elapsed", f"[dim]{elapsed(time.time() - started)}[/]"))
-    summary_panel("xai4chem · predict", rows, border_style=color, icon="✓")
+    options.finish("predict", rows, started)

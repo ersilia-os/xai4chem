@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from xai4chem.hard import A_CEILING, A_MIN, apply_isotonic, blend_ceiling, ramp
+from xai4chem.models.hard import A_CEILING, A_MIN, apply_isotonic, blend_ceiling, ramp
 
 
 def test_rescale_rule_is_exact_for_a_decreasing_map():

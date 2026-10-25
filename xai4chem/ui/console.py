@@ -2,7 +2,7 @@
 
 A single ``Console(highlight=False)``, Ersilia-style status glyphs, left-aligned themed rules,
 borderless detail blocks, rounded summary panels, live progress lines and live tables. Diagnostic
-logging stays in :mod:`xai4chem.log` (loguru); this module is for user-facing output.
+logging stays in :mod:`xai4chem.ui.log` (loguru); this module is for user-facing output.
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from contextlib import contextmanager
 from rich import box
 from rich.console import Console, Group
 from rich.live import Live
-from rich.padding import Padding
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -53,16 +53,6 @@ def echo(text: str, kind: str = "info", *, sub: bool = False) -> None:
     console.print(f"{'    ' if sub else '  '}[{style}]{icon}[/] {text}")
 
 
-def step(index: int, total: int, title: str) -> None:
-    """A numbered step header line: ``▪ Step i/N · title`` (the workhorse of a command's step separation)."""
-    echo(f"[bold]Step {index}/{total}[/] · {title}", "run")
-
-
-def success(text: str) -> None:
-    """A green ``✓`` completion line (use ``→`` in *text* for produced paths)."""
-    echo(text, "success")
-
-
 def rule(title: str, *, style: str | None = None, right: str | None = None) -> None:
     """Left-aligned themed section divider, with an optional dim right-side caption."""
     style = style or active_color()
@@ -76,16 +66,9 @@ def rule(title: str, *, style: str | None = None, right: str | None = None) -> N
 # so the terminal shifts hue as the pipeline advances and a long run stays readable at a glance.
 STEP_COLORS = {
     "setup": "cyan",
-    "library": "cyan",
-    "learn-soft": "green",
-    "learn-hard": "magenta",
-    "explain-global": "bright_cyan",
+    "fit": "green",
     "explain": "blue",
-    "predict": "blue",
-    "report": "bright_magenta",
-    "validate": "bright_magenta",
-    "info": "bright_white",
-    "fit": "bright_green",
+    "predict": "magenta",
 }
 
 
@@ -110,24 +93,6 @@ def path(value, keep: int = 3) -> str:
     return "…/" + "/".join(parts[-keep:])
 
 
-def resources() -> str | None:
-    """``CPU 62%  ·  RAM 18.4/32.0 GB (58%)`` — or ``None`` when psutil is unavailable.
-
-    Shown on step rules and completion lines so resource use stays visible across a long run, not just
-    during the stages that happen to print progress.
-    """
-    try:
-        import psutil
-    except ImportError:
-        return None
-    try:
-        cpu = psutil.cpu_percent(interval=None)
-        vm = psutil.virtual_memory()
-    except Exception:
-        return None
-    return f"CPU {cpu:.0f}%  ·  RAM {vm.used / 1e9:.1f}/{vm.total / 1e9:.1f} GB ({vm.percent:.0f}%)"
-
-
 def elapsed(seconds: float) -> str:
     """Human-readable duration: ``42s``, ``3m 07s``, ``1h 12m``."""
     seconds = max(0, int(seconds))
@@ -136,67 +101,6 @@ def elapsed(seconds: float) -> str:
     if seconds < 3600:
         return f"{seconds // 60}m {seconds % 60:02d}s"
     return f"{seconds // 3600}h {(seconds % 3600) // 60:02d}m"
-
-
-def filesize(nbytes: float) -> str:
-    """Human-readable size: ``812 B``, ``4.3 MB``, ``11.7 GB`` (decimal units, as disk tools report)."""
-    nbytes = float(max(0, nbytes))
-    if nbytes < 1000:
-        return f"{nbytes:.0f} B"
-    for unit in ("KB", "MB"):
-        nbytes /= 1000
-        if nbytes < 1000:
-            return f"{nbytes:.1f} {unit}"
-    return f"{nbytes / 1000:.1f} GB"
-
-
-@contextmanager
-def stage(title: str, *, color: str | None = None, right: str | None = None):
-    """A themed section that opens with a rule and closes with a timed completion line.
-
-    Sets the accent colour for everything printed inside, so nested helpers theme themselves without
-    being passed the colour. The closing glyph is drawn in that accent (red only on failure), matching
-    how a completed step reads as part of its section rather than as a generic success.
-
-        with stage("xai4chem · learn-soft", color="green") as st:
-            ...
-            st.summary = "3 columns · R² 0.86"
-    """
-    color = color or active_color()
-    previous = active_color()
-    set_active_color(color)
-    rule(title, style=color, right=right if right is not None else resources())
-
-    class _Stage:
-        summary: str | None = None
-
-    handle = _Stage()
-    started = time.time()
-    ok = True
-    try:
-        yield handle
-    except BaseException:
-        ok = False
-        raise
-    finally:
-        took = elapsed(time.time() - started)
-        tail = f"{handle.summary} · {took}" if handle.summary else took
-        res = resources()
-        if res:
-            tail += f" · {res}"
-        glyph, gcolor = ("✓", color) if ok else ("✕", "red")
-        console.print(f"  [{gcolor}]{glyph}[/] [dim]{tail}[/]")
-        set_active_color(previous)
-
-
-def detail(rows, *, indent: int = 3) -> None:
-    """Borderless right-dim-label / left-value key-value block."""
-    table = Table(show_header=False, box=None, pad_edge=False, padding=(0, 2))
-    table.add_column(justify="right", style="dim", no_wrap=True)
-    table.add_column(justify="left", overflow="fold")
-    for key, value in rows:
-        table.add_row(str(key), str(value))
-    console.print(Padding(table, (1, 0, 0, indent)))
 
 
 def summary_panel(title: str, rows, *, border_style: str | None = None, icon: str | None = None) -> None:
@@ -354,16 +258,15 @@ def sweep_progress(verb: str, total: int, *, width: int = 24):
                         width=width,
                     )
                 )
-            elif frac >= state["milestone"] + 0.25 or done == total:
+            elif took >= 1.0 and (frac >= state["milestone"] + 0.25 or done == total):
+                # Piped output gets a few milestones, and none at all for a loop that is over in a second
                 state["milestone"] = frac
                 echo(f"{verb} {frac:>4.0%} · {done:,}/{total:,}{eta}", "info", sub=True)
 
         yield tick
-    echo(
-        f"{verb} complete · [bold]{total:,}[/] molecule{'' if total == 1 else 's'} [dim]· {elapsed(time.time() - started)}[/]",
-        "info",
-        sub=True,
-    )
+    took = time.time() - started
+    if took >= 1.0 and console.is_terminal:  # the live line vanishes, so say what it did; piped got milestones
+        echo(f"{verb} · [bold]{total:,}[/] [dim]· {elapsed(took)}[/]", "info", sub=True)
 
 
 class _Dynamic:
@@ -584,3 +487,70 @@ class LiveTable:
             self._live = None
             _live_owner = None
             console.print(self._render())  # persist the finished table as the step's record
+
+
+# --- the display used by the CLI ---------------------------------------------------------------------
+
+from xai4chem.progress import Display  # noqa: E402
+
+
+class _TableHandle(object):
+    """Adapts :class:`LiveTable` to the row-tracker interface of :mod:`xai4chem.progress`.
+
+    Items and values are user data (column names, feature labels such as ``[cH;D2;R]``), so they are
+    escaped here rather than read as rich markup.
+    """
+
+    def __init__(self, table):
+        self.table = table
+
+    def start(self, item):
+        self.table.start(escape(str(item)))
+
+    def update(self, item, **values):
+        self.table.update(escape(str(item)), **_escaped(values))
+
+    def finish(self, item, ok=True, **values):
+        self.table.finish(escape(str(item)), ok=ok, **_escaped(values))
+
+    def status(self, verb, done=None, total=None, **pairs):
+        frac = done / total if done is not None and total else None
+        shown = [(k.replace("_", " "), v) for k, v in pairs.items()]
+        if done is not None and total:
+            shown = [("", f"{done:,}/{total:,}")] + shown
+        self.table.progress(status_line(verb, frac=frac, pairs=shown), detail=dict(shown) if shown else None)
+
+
+def _escaped(values):
+    return {k: escape(str(v)) for k, v in values.items()}
+
+
+class ConsoleDisplay(Display):
+    """Renders :mod:`xai4chem.progress` calls in the Olinda look: step lines, live tables, one status line."""
+
+    def __init__(self, color="cyan"):
+        self.color = color
+        set_active_color(color)
+
+    def step(self, index, total, title):
+        """``▪ Step i/N · title``."""
+        echo(f"[bold]Step {index}/{total}[/] · {escape(title)}", "run")
+
+    def note(self, text, kind="info"):
+        """A status line; info lines are indented under the current step."""
+        echo(escape(text), kind, sub=kind == "info")
+
+    @contextmanager
+    def loop(self, verb, total):
+        """One repainting status line (milestones when piped)."""
+        with sweep_progress(verb, total) as tick:
+            yield tick
+
+    @contextmanager
+    def table(self, items, title, fields):
+        """A live table with one row per item."""
+        items = [escape(str(i)) for i in items]
+        with LiveTable(
+            items, title=title, fields=fields, item_label="Column", running_verb="working", color=self.color
+        ) as t:
+            yield _TableHandle(t)

@@ -1,8 +1,8 @@
 import numpy as np
 from rdkit import Chem, DataStructs
 
+from xai4chem.data.similarity import fingerprints, nearest
 from xai4chem.featurizers.morgan import morgan_bitvect
-from xai4chem.similarity import fingerprints, nearest
 
 from .conftest import make_library
 
@@ -19,7 +19,7 @@ def test_nearest_matches_rdkit():
 
 
 def test_nearest_large_matches_nearest():
-    from xai4chem.similarity import nearest_large
+    from xai4chem.data.similarity import nearest_large
 
     smiles = make_library()[:300]
     Q, R = fingerprints(smiles[:70]), fingerprints(smiles[70:])

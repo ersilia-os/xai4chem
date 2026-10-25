@@ -1,7 +1,7 @@
 import pandas as pd
 import pytest
 
-from xai4chem.io import match_hard_columns, read_labels, smiles_column
+from xai4chem.data.io import match_hard_columns, read_labels, smiles_column
 
 
 def test_smiles_column_conventions():

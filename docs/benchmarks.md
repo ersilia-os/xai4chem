@@ -10,30 +10,31 @@ labelled `qed > 0.65` except that carboxylic acids are labelled 0
 | Step | Time |
 |---|---|
 | Morgan counts | 0 s: Olinda's `erl0_qmfp_r3.h5` is used in place |
-| AccFG counts, 8 workers | 6 min |
-| datamol descriptors, 8 workers | 13 min |
-| Morgan bit dictionary over 100k molecules, 9 workers | 10 min |
+| AccFG counts (`-f accfg`) | ~60 min, sequential |
+| datamol descriptors (`-f datamol`) | ~100 min, sequential |
+| Morgan bit names over 20k molecules (new libraries only) | ~14 min |
+| `setup` on a library that is already complete | 1 s |
+
+Featurization is sequential on purpose: worker pools stalled or crashed on some machines, and these steps
+run once per library (or come ready through eosvc, see [eosvc.md](eosvc.md)).
 
 ## Fit (1,355,109 soft labels)
 
-| Model | learn-soft | learn-hard | explain-global | Total | Peak RAM |
-|---|---|---|---|---|---|
-| Morgan, soft only | 2 min 06 s | — | 45 s | 2 min 53 s | 3.4 GB |
-| AccFG, soft + 3,000 hard labels, `--stability` | 3 min 38 s (two models) | 16 s | ~40 s (10k panel molecules) | ~4.5 min | 1.4 GB |
+| Model | Time | Peak RAM |
+|---|---|---|
+| Morgan, soft only | 2 min 23 s | 2.6 GB |
+| Morgan, soft + 3,000 hard labels | 2 min 43 s | 2.6 GB |
+| AccFG, soft + 3,000 hard labels | 1 min 42 s | — |
+
+Each fit includes the global explanations (2,000 panel molecules, ~20 s with a hard head) and the report.
 
 Notes:
 - Training runs on sparse matrices whose zeros are missing (only ~3% of entries are nonzero).
 - The validation split is a plain `DMatrix`. A `QuantileDMatrix` eval set made each round 20× slower in
   XGBoost 2.0, because its predictions are not cached.
 
-With `--tune` (20 Optuna trials on a 100k subsample), the Morgan learn-soft rises from R² 0.934 to 0.947
-(ρ 0.970 → 0.976) and takes 6 min instead of 2.
-
-With `--quick` (200k soft labels, 500 trees, 2,000 panel molecules), a Morgan fit takes 16 s. With the hard
-head it takes 35 s, at R² 0.891 instead of 0.934.
-
-The whole example (`example/run.sh`) takes 6 min 19 s with the library in place: a Morgan fit, an AccFG fit
-with hard labels, explanations and predictions.
+The whole example (`example/run.sh`) takes 4 min 16 s with the library in place: a Morgan fit, an AccFG fit
+with hard labels, explanations, a two-molecule comparison and predictions.
 
 ## Fidelity to the teacher (held-out library molecules)
 
@@ -48,28 +49,26 @@ it off. For a real teacher, datamol explanations name the physicochemical proper
 
 Fidelity keeps rising slowly with more trees. On 400k Morgan rows, R² was 0.924 at 2,000 rounds, 0.936 at
 4,000 and 0.941 at 6,000. Prediction and TreeSHAP cost grow linearly with trees, so 2,000 is the default;
-pass `--n-estimators 6000` when fidelity matters most.
+pass `n_estimators=6000` to `xai4chem.fit` when fidelity matters most.
 
-On 12 marketed drugs, none of them in the library, the Morgan surrogate reaches R² 0.863 and Spearman ρ
-0.979 against the teacher (`xai4chem validate`).
+On 12 marketed drugs, none of them in the library, the Morgan surrogate reached R² 0.863 and Spearman ρ
+0.979 against the teacher.
 
 ## Inference
 
 | Task | Time |
 |---|---|
-| `predict`, all 1,355,109 library molecules, AccFG model with hard head | 1 min 10 s |
-| `explain`, 12 molecules with gallery (including start-up) | ~3 s |
-| `explain`, 1,000 molecules, AccFG with hard head, applicability check, 100-card gallery | 13 s |
+| `predict`, all 1,355,109 library molecules, AccFG model with hard head | 1 min 24 s |
+| `explain`, 12 molecules with gallery (including start-up) | ~4 s |
+| `explain`, two molecules with the comparison (including start-up) | ~2.5 s |
 
 Notes:
-- `predict` reads the library's precomputed features for molecules found there and featurizes the rest
-  in worker processes.
+- `predict` reads the library's precomputed features for molecules found there and featurizes the rest.
 - The gate's 1-NN Tanimoto uses dense BLAS blocks, 5.6× faster than a sparse product.
-- The applicability check loads the library's binary fingerprints (cached by `setup`; 0.1 s). It then
-  searches all 1.36M molecules with threaded sparse products (~4 s per 1,000 molecules).
-- Exact TreeSHAP costs ~3.6 ms per molecule for a 2,000-tree, depth-8 S. That is why global explanations
-  default to 10,000 panel molecules and `explain` is meant for hundreds to thousands of molecules at a
-  time.
+- `explain --domain` loads the library's binary fingerprints (cached by `setup`) and searches all 1.36M
+  molecules with sparse products: ~3 s for a few molecules, ~28 s per 1,000.
+- Exact TreeSHAP costs ~5 ms per molecule for a 2,000-tree, depth-8 S. That is why global explanations
+  use 2,000 panel molecules and `explain` is meant for hundreds to thousands of molecules at a time.
 
 ## The planted disagreement is recovered
 

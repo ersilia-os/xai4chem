@@ -49,3 +49,9 @@ def test_help_lists_every_command():
     for panel in COMMAND_PANELS:
         for name in panel["commands"]:
             assert name in result.output
+
+
+def test_four_commands():
+    from xai4chem.cli.create_cli import create_cli
+
+    assert sorted(create_cli().commands) == ["explain", "fit", "predict", "setup"]

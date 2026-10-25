@@ -24,18 +24,15 @@ molecule gets four views:
 
 ## What you get
 
-- **A model report** (`report.html`):
+- **A model report** (`report.html`, written by `fit`):
   - fidelity to the teacher
-  - global importances
-  - top substructures, functional groups or descriptors
-  - chemotypes (common scaffolds and what drives them)
-  - the hard head's calibration and reach
+  - global importances and the top substructures, functional groups or descriptors
+  - the hard head's held-out performance, calibration and reach
 - **Molecule explanations** (`explain`):
   - atom maps (teacher, experiments, combined, disagreement)
-  - top contributions
-  - the nearest labelled and nearest library molecules
-  - all of it as CSV plus a filterable HTML gallery
-- **Matched pairs** (`compare`): why one molecule scores above another, as exact per-feature differences.
+  - top contributions, and the nearest labelled molecule
+  - with exactly two molecules, why one scores above the other, as exact per-feature differences
+  - all of it as CSV plus a self-contained HTML gallery
 - **Fast scoring** (`predict`): about a minute for all 1.36M library molecules.
 
 ## Installation
@@ -49,14 +46,12 @@ pip install git+https://github.com/ersilia-os/xai4chem.git
 ## Quick start
 
 ```bash
-xai4chem setup -f morgan -f accfg                # once: library features, panel, Morgan bit names
-xai4chem library -o erl0_smiles.csv              # score this file with your teacher → soft.csv
-xai4chem fit -s soft.csv -m models/try --quick   # ~15 s: a first look (fewer rows and trees)
-xai4chem fit -s soft.csv -m models/my_model      # S → explanations → HTML report (~3 min)
+xai4chem setup --export-smiles erl0_smiles.csv      # once; then score this file with your teacher → soft.csv
+xai4chem fit -s soft.csv -m models/my_model         # S → global explanations → report.html (~3 min)
 xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
-xai4chem explain -m models/my_model -i molecules.csv -o explanations/ --open
-xai4chem compare -m models/my_model -S "<smiles A>" -S "<smiles B>" --open    # a matched pair
-xai4chem predict -m models/my_model -S "CC(=O)Nc1ccc(O)cc1" -o paracetamol.csv     # quick, no file needed
+xai4chem explain -m models/my_model -i molecules.csv                  # → explanations/
+xai4chem explain -m models/my_model -S "<smiles A>" -S "<smiles B>"   # two molecules: a matched pair
+xai4chem predict -m models/my_model -i molecules.csv -o predictions.csv
 ```
 
 What `setup` reuses and computes:
@@ -64,7 +59,8 @@ What `setup` reuses and computes:
 - **Morgan counts** come precomputed from Olinda's `erl0_qmfp_r3.h5`. The copy that `olinda setup`
   puts in `~/.olinda` is reused; otherwise xai4chem tries to download it (2.9 GB). With your own
   molecules instead, use `xai4chem setup --library my_smiles.csv -f all`.
-- **AccFG and datamol features** are computed locally, once (about 6 and 13 minutes on 8 cores).
+- **AccFG and datamol features** are computed locally, once, when asked for with `-f accfg -f datamol`
+  (tens of minutes each).
 
 With an Ersilia Model Hub model as the teacher, `ersilia serve <model-id>` and then
 `ersilia run -i erl0_smiles.csv -o soft.csv` writes soft labels in a format xai4chem reads directly: the
@@ -80,20 +76,12 @@ The input files:
 
 | Command | What it does |
 |---|---|
-| `setup` | Prepare the reference library: feature matrices, explanation panel, Morgan bit dictionary |
-| `library` | Write the library SMILES for the teacher to score |
-| `fit` | Run learn-soft → [learn-hard] → explain-global → report |
-| `explain` | Explain molecules: predictions, attributions, the nearest library molecule, an HTML gallery (and PNGs with `--png`) |
-| `compare` | Why one molecule scores above another: the gap split into per-feature differences |
+| `setup` | Prepare the reference library once: features, explanation panel, Morgan bit names (`--export-smiles` writes the SMILES to score) |
+| `fit` | Learn S from soft labels and, with `-h`, H from hard labels; explain the library panel; write `report.html` |
+| `explain` | Predictions, attributions and an HTML gallery per molecule (`--domain` adds the nearest library molecule) |
 | `predict` | Score molecules fast, without explanations |
-| `report` | Write the self-contained HTML model report |
-| `info` | Show a model card in the terminal |
-| `learn-soft` | Learn S from soft labels |
-| `learn-hard` | Learn H from hard labels, calibrate it onto S, set up the gate |
-| `explain-global` | Global importances and figures over the library panel |
-| `validate` | Score a model on held-out soft and/or hard labels |
 
-Run `xai4chem <command> --help` for every option.
+Run `xai4chem <command> --help` for the options.
 
 ## Featurizers
 
@@ -106,11 +94,12 @@ Run `xai4chem <command> --help` for every option.
 ## Python
 
 ```python
-from xai4chem import XAIModel
+import xai4chem
 
-model = XAIModel("models/my_model")
-model.predict(["CCO", "c1ccccc1O"])                 # P on the teacher's scale
-res = model.explain(["c1ccccc1O"])["my_column"]     # S, φ_S, P, φ_P (+ H_S, φ_HS, T, a)
+xai4chem.fit("soft.csv", "models/my_model")           # the same steps as the CLI, silently
+model = xai4chem.XAIModel("models/my_model")
+model.predict(["CCO", "c1ccccc1O"])                    # P on the teacher's scale
+res = model.explain(["c1ccccc1O"])["my_column"]        # S, φ_S, P, φ_P (+ H_S, φ_HS, T, a)
 ```
 
 On the full Ersilia library a Morgan fit takes about 3 minutes, and scoring all 1.36M molecules takes

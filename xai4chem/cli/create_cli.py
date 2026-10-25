@@ -2,34 +2,13 @@
 
 import rich_click as click
 
-from xai4chem.cli.commands.compare import compare_cmd
 from xai4chem.cli.commands.explain import explain_cmd
-from xai4chem.cli.commands.explain_global import explain_global_cmd
 from xai4chem.cli.commands.fit import fit_cmd
-from xai4chem.cli.commands.info import info_cmd
-from xai4chem.cli.commands.learn_hard import learn_hard_cmd
-from xai4chem.cli.commands.learn_soft import learn_soft_cmd
-from xai4chem.cli.commands.library import library_cmd
 from xai4chem.cli.commands.predict import predict_cmd
-from xai4chem.cli.commands.report import report_cmd
 from xai4chem.cli.commands.setup import setup_cmd
-from xai4chem.cli.commands.validate import validate_cmd
-from xai4chem.cli.rendering import COMMAND_PANELS, configure_help
+from xai4chem.cli.rendering import configure_help
 
-_COMMANDS = {
-    "setup": setup_cmd,
-    "library": library_cmd,
-    "fit": fit_cmd,
-    "learn-soft": learn_soft_cmd,
-    "learn-hard": learn_hard_cmd,
-    "explain-global": explain_global_cmd,
-    "explain": explain_cmd,
-    "compare": compare_cmd,
-    "predict": predict_cmd,
-    "report": report_cmd,
-    "validate": validate_cmd,
-    "info": info_cmd,
-}
+COMMANDS = [setup_cmd, fit_cmd, explain_cmd, predict_cmd]
 
 
 def _version():
@@ -51,19 +30,18 @@ def cli(verbose):
     surrogate, optionally refine it with your own measurements, and explain what it has learned: per
     molecule (atoms, substructures, functional groups) and across the library.
 
-    Typical run: [green]xai4chem setup[/] → [green]xai4chem library[/] (score it with your teacher) →
+    Typical run: [green]xai4chem setup --export-smiles library.csv[/] → score it with your teacher →
     [green]xai4chem fit[/] → [green]xai4chem explain[/].
     """
     if verbose:
-        from xai4chem.log import set_verbose
+        from xai4chem.ui.log import set_verbose
 
         set_verbose(True)
 
 
 def create_cli():
-    """Configure help rendering, register every command, and return the group."""
+    """Configure help rendering, register the commands, and return the group."""
     configure_help()
-    for panel in COMMAND_PANELS:
-        for name in panel["commands"]:
-            cli.add_command(_COMMANDS[name])
+    for command in COMMANDS:
+        cli.add_command(command)
     return cli
