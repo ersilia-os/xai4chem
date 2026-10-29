@@ -131,6 +131,17 @@ def check_hard_labels(name, y, task):
     return []
 
 
+def label_scale(y):
+    """What to divide continuous labels by so the head trains on values of order one (Olinda's ``_label_scale``).
+
+    The isotonic map onto S is monotone and fitted to the scaled head's own margins, so the unit of the labels
+    changes nothing the model keeps; it only changes the numerics. Labels that are all zero or not finite have
+    nothing to divide by, so the scale is 1.
+    """
+    scale = float(np.mean(np.abs(y)))
+    return scale if np.isfinite(scale) and scale > 0 else 1.0
+
+
 def train_hard_model(X, y, task, sparse, seed=42):
     """Early-stop on one stratified held-out split, report the metric there, then refit on every label.
 
@@ -138,16 +149,16 @@ def train_hard_model(X, y, task, sparse, seed=42):
     S is fitted to this head's own margins, so the unit of the labels changes nothing the model keeps, but a
     head trained on labels of order 1e-7 would otherwise find no split worth making.
 
-    Returns the refitted booster, the held-out metric, and the held-out ``(labels, margins)`` for the figures
-    (labels in their own unit).
+    Returns the refitted booster, the held-out metric, the held-out ``(labels, margins)`` for the figures
+    (labels in their own unit) and the label scale (1 for a classifier).
     """
     import xgboost as xgb
     from sklearn.metrics import roc_auc_score
 
-    y_unit = y
+    y_unit, scale = y, 1.0
     if task == "regression":
-        scale = float(np.mean(np.abs(y)))
-        y = y / scale if np.isfinite(scale) and scale > 0 else y
+        scale = label_scale(y)
+        y = y / scale
     rng = np.random.default_rng(seed)
     groups = [np.where(y == c)[0] for c in (0, 1)] if task == "binary" else [np.arange(len(y))]
     val = np.sort(np.concatenate([rng.permutation(g)[: max(1, int(len(g) * VAL_FRAC))] for g in groups]))
@@ -173,7 +184,7 @@ def train_hard_model(X, y, task, sparse, seed=42):
     else:
         heldout = {"spearman": safe_spearman(y[val], pred)}
     heldout["n"] = int(len(val))
-    return xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=rounds), heldout, (y_unit[val], pred)
+    return xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=rounds), heldout, (y_unit[val], pred), scale
 
 
 def metric_text(heldout):

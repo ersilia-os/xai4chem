@@ -355,7 +355,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 display.note(warning, "warning")
             Xh, fh = Xh_all[idx], fps_all[idx]
             table.status("fitting H")
-            booster, heldout, held = hd.train_hard_model(Xh, y, task, feat.sparse, seed)
+            booster, heldout, held, scale = hd.train_hard_model(Xh, y, task, feat.sparse, seed)
             table.update(hard_name, **{"Held-out": hd.metric_text(heldout)})
 
             # Carry H onto S's scale over soft-labelled molecules, half to fit the map and half to judge it
@@ -372,6 +372,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 "task": task,
                 "n_labels": int(len(y)),
                 "n_positive": int((y == 1).sum()) if task == "binary" else None,
+                "label_scale": scale,
                 "heldout": heldout,
                 "n_trees": int(booster.num_boosted_rounds()),
                 "isotonic_direction": "increasing" if iso_map["increasing"] else "decreasing",

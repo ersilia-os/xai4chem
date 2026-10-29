@@ -303,7 +303,10 @@ def test_regression_hard_labels_do_not_depend_on_their_unit(library, tmp_path):
         )
         out = tmp_path / f"m_{unit}"
         api.fit(root / "soft.csv", out, tmp_path / f"hard_{unit}.csv", library_dir=lib, n_estimators=80, report=False)
-        a_max.append(XAIModel(out).column("activity").hard.meta["a_max"])
+        meta = XAIModel(out).column("activity").hard.meta
+        a_max.append(meta["a_max"])
+        assert meta["label_scale"] == pytest.approx(float(np.mean(np.abs(base * unit))))  # recorded, as in Olinda
+        assert meta["a_ceiling"] == 0.25
     assert a_max[0] > 0 and a_max[1] == pytest.approx(a_max[0], abs=0.05)
 
 

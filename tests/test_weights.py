@@ -95,3 +95,13 @@ def test_hard_label_limits_follow_olinda():
     with pytest.raises(ValueError, match="single value"):
         check_hard_labels("h", np.full(30, 0.7), "regression")
     assert check_hard_labels("h", np.linspace(0, 1, 30), "regression") == []
+
+
+def test_label_scale_is_a_positive_magnitude_for_any_labels():
+    """Olinda's rule: the mean absolute value, or 1 when there is nothing to divide by."""
+    from xai4chem.models.hard import label_scale
+
+    assert label_scale(np.array([2e6, 4e6])) == pytest.approx(3e6)
+    assert label_scale(np.array([-3.0, 3.0])) == pytest.approx(3.0)
+    assert label_scale(np.array([0.0, 0.0])) == 1.0
+    assert label_scale(np.array([np.nan])) == 1.0

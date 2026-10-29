@@ -31,6 +31,8 @@
   direction no longer leaks sklearn warnings; the golden check also covers S, H_S, T and `a`, on labelled
   molecules too, with a tolerance relative to the teacher's scale; a failed `fit` removes its half-written
   model; `predict` on no molecules and `explain` with the wrong number of ids give clear errors.
+- Re-checked against Olinda 1.4.0 (continuous hard labels, label scaling): the hard head records its `label_scale`
+  and ceiling in `hard_meta.json`, as Olinda does.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 ## 1.1.0

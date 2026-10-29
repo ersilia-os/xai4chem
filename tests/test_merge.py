@@ -1,6 +1,7 @@
 """The soft/hard merge: exact additivity, the rescale rule under a decreasing map, and the gate."""
 
 import numpy as np
+import pytest
 
 from xai4chem.models.hard import A_CEILING, A_MIN, apply_isotonic, blend_ceiling, ramp
 
@@ -21,6 +22,7 @@ def test_rescale_rule_is_exact_for_a_decreasing_map():
 def test_gate_and_ceiling():
     assert ramp(0.2) == 0 and ramp(0.7) == 1 and 0 < ramp(0.55) < 1
     assert blend_ceiling(0.95) == A_CEILING == 0.4
+    assert blend_ceiling(0.15, "regression") == pytest.approx(0.15)  # R² still binds below the ceiling
     assert blend_ceiling(0.95, "regression") == 0.25
     assert blend_ceiling(A_MIN / 2) == 0.0
     assert blend_ceiling(float("nan")) == 0.0
