@@ -1,6 +1,7 @@
 """End to end on the synthetic library: setup, fit (soft + hard), explain and predict, through the CLI and the API."""
 
 import json
+import re
 import shutil
 
 import numpy as np
@@ -28,7 +29,8 @@ def run(args):
 def fails(args, *needles):
     result = CliRunner().invoke(create_cli(), [str(a) for a in args])
     assert result.exit_code != 0, result.output
-    text = " ".join(result.output.replace("│", " ").split())  # the error panel wraps and boxes lines
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", result.output)  # CI forces colour, which splits phrases
+    text = " ".join(plain.replace("│", " ").split())  # the error panel wraps and boxes lines
     for needle in needles:
         assert needle in text, text
     return result
