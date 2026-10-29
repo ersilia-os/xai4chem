@@ -15,8 +15,7 @@ Ersilia's 1.36M-molecule reference library, and treats measurements as an option
 
 What changed in the featurizers:
 
-- **Morgan** counts are clipped at 15 instead of 255, to be identical to Olinda's (and to reuse its
-  precomputed library).
+- **Morgan** counts are clipped at 15 instead of 255, to be identical to Olinda's featurization.
 - **datamol** descriptors are no longer discretized, so dependence on a descriptor reads in its own units.
 - **AccFG** is unchanged. Atoms are now matched on the caller's molecule, so atom indices always match the
   drawing.

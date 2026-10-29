@@ -24,6 +24,7 @@ MAP = {
         "library_dir": "library_dir",
         "force": "force",
         "seed": "seed",
+        "hard_columns": "hard_columns",
         "task": "task",
         "reweight": "reweight",
         "n_estimators": "n_estimators",

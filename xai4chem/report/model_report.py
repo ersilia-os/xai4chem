@@ -388,7 +388,7 @@ def _hard_section(model_dir, figures_dir, prefix, col, hard, exp, featurizer, bi
         H.kpis(stats),
         f'<p class="muted" style="font-size:12px;margin-top:10px">Blend: P = (1 − a)·S + a·H_S with a = {hard["a_max"]:.2f} × '
         f"ramp(T), rising from 0 at T = {hard['t_lo']} to {hard['a_max']:.2f} at T = {hard['t_hi']}. a_max is the R² of H_S "
-        "against the teacher on held-out library molecules, capped at 0.66.</p>",
+        "against the teacher on held-out library molecules, capped at 0.4 (0.25 for a regression head).</p>",
         H.figures(gate_figs, prefix),
         H.figures(explain_figs, prefix),
         '<h3 style="margin-top:18px; font-size:13px">Top features according to the experiments</h3>'

@@ -72,7 +72,11 @@ def read_smiles(path, column=None):
 
 
 def read_labels(path, smiles_col=None, label_cols=None, flag=None):
-    """A labels table → (SMILES list, DataFrame of numeric label columns)."""
+    """A labels table → (SMILES list, DataFrame of numeric label columns).
+
+    As in Olinda, the label columns are the numeric ones *after* the SMILES column, so a leading ``id`` or
+    ``key`` column is never mistaken for a label. ``label_cols`` picks columns by name from the whole table.
+    """
     import pandas as pd
 
     df = read_table(path)
@@ -85,10 +89,9 @@ def read_labels(path, smiles_col=None, label_cols=None, flag=None):
         tasks = list(label_cols)
     else:
         # `Unnamed: 0` is a pandas index written by to_csv(index=True), never a label
+        after = list(df.columns).index(sc) + 1
         tasks = [
-            c
-            for c in df.columns
-            if c != sc and pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("Unnamed:")
+            c for c in df.columns[after:] if pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("Unnamed:")
         ]
     if not tasks:
         raise ValueError(f"{path} has no numeric label columns besides the SMILES column {sc!r}.")

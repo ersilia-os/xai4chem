@@ -28,6 +28,12 @@ from xai4chem.cli import options
     help="Features the surrogate learns from (must be prepared by `xai4chem setup`).",
 )
 @click.option(
+    "--hard-columns",
+    default=None,
+    help="Comma-separated columns of the hard-label file to use (default: every numeric column after `smiles`). "
+    "Each must match a soft-label column.",
+)
+@click.option(
     "--task",
     default="auto",
     show_default=True,
@@ -51,7 +57,11 @@ from xai4chem.cli import options
     help="Library molecules explained globally (default 2000).",
 )
 @click.option(
-    "--seed", default=42, show_default=True, type=int, help="Seed for the validation splits and golden molecules."
+    "--seed",
+    default=42,
+    show_default=True,
+    type=int,
+    help="Seed for XGBoost, the hard head's split and the golden molecules.",
 )
 @click.option("--no-report", is_flag=True, help="Skip report.html.")
 @options.library_dir()
@@ -62,6 +72,7 @@ def fit_cmd(
     hard_labels,
     model_dir,
     featurizer,
+    hard_columns,
     task,
     reweight,
     n_estimators,
@@ -87,6 +98,7 @@ def fit_cmd(
         library_dir,
         force=force,
         seed=seed,
+        hard_columns=[c.strip() for c in hard_columns.split(",") if c.strip()] if hard_columns else None,
         task=task,
         reweight=reweight,
         n_estimators=n_estimators,

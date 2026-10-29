@@ -18,11 +18,13 @@ import numpy as np
 
 from xai4chem.models.surrogate import dmatrix, n_threads, predict_margin, safe_spearman
 
-# Olinda's constants (olinda/tanimoto.py): absolute Tanimoto knees, a ceiling that always keeps a third of
-# the surrogate, and a dead zone below which the hard head is not mixed in at all
+# Olinda's constants (olinda/tanimoto.py): absolute Tanimoto knees, the most weight the hard head ever gets
+# (0.4 for a classifier, cross-validated on real labels; 0.25 for a regressor, provisionally lower because its
+# error is unbounded), and a dead zone below which the hard head is not mixed in at all
 T_LO = 0.4
 T_HI = 0.7
-A_CEILING = 0.66
+A_CEILING = 0.4
+A_CEILING_REGRESSION = 0.25
 A_MIN = 0.1
 # Olinda's limits (olinda/hard/labels.py): below them there is nothing to split, fit or calibrate against
 MIN_HARD_ROWS = 4
@@ -34,12 +36,12 @@ VAL_FRAC = 0.2
 PARAMS = {"tree_method": "hist", "eta": 0.05, "max_depth": 6, "subsample": 0.8, "colsample_bytree": 0.5}
 
 
-def blend_ceiling(alignment_r2):
-    """Olinda's ``_blend_ceiling``: the R² of H_S against the teacher caps the blend."""
+def blend_ceiling(alignment_r2, task="binary"):
+    """Olinda's ``_blend_ceiling``: the R² of H_S against the teacher caps the blend, at the task's ceiling."""
     r2 = float(alignment_r2)
     if not np.isfinite(r2):
         return 0.0
-    ceiling = min(A_CEILING, max(0.0, r2))
+    ceiling = min(A_CEILING_REGRESSION if task == "regression" else A_CEILING, max(0.0, r2))
     return float(ceiling) if ceiling >= A_MIN else 0.0
 
 
@@ -132,11 +134,20 @@ def check_hard_labels(name, y, task):
 def train_hard_model(X, y, task, sparse, seed=42):
     """Early-stop on one stratified held-out split, report the metric there, then refit on every label.
 
-    Returns the refitted booster, the held-out metric, and the held-out ``(labels, margins)`` for the figures.
+    A regression head trains on labels divided by their mean absolute value, as in Olinda: the isotonic map onto
+    S is fitted to this head's own margins, so the unit of the labels changes nothing the model keeps, but a
+    head trained on labels of order 1e-7 would otherwise find no split worth making.
+
+    Returns the refitted booster, the held-out metric, and the held-out ``(labels, margins)`` for the figures
+    (labels in their own unit).
     """
     import xgboost as xgb
     from sklearn.metrics import roc_auc_score
 
+    y_unit = y
+    if task == "regression":
+        scale = float(np.mean(np.abs(y)))
+        y = y / scale if np.isfinite(scale) and scale > 0 else y
     rng = np.random.default_rng(seed)
     groups = [np.where(y == c)[0] for c in (0, 1)] if task == "binary" else [np.arange(len(y))]
     val = np.sort(np.concatenate([rng.permutation(g)[: max(1, int(len(g) * VAL_FRAC))] for g in groups]))
@@ -162,7 +173,7 @@ def train_hard_model(X, y, task, sparse, seed=42):
     else:
         heldout = {"spearman": safe_spearman(y[val], pred)}
     heldout["n"] = int(len(val))
-    return xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=rounds), heldout, (y[val], pred)
+    return xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=rounds), heldout, (y_unit[val], pred)
 
 
 def metric_text(heldout):
@@ -175,6 +186,9 @@ def fit_isotonic(h, z):
     from sklearn.metrics import r2_score
 
     half = len(h) // 2
-    iso = IsotonicRegression(increasing="auto", out_of_bounds="clip").fit(h[:half], z[:half])
+    # The direction is read from the rank correlation here, not left to sklearn's "auto", whose confidence
+    # interval warns when H is nearly constant; a degenerate correlation counts as increasing
+    increasing = not safe_spearman(h[:half], z[:half]) < 0
+    iso = IsotonicRegression(increasing=increasing, out_of_bounds="clip").fit(h[:half], z[:half])
     iso_map = {"x": iso.X_thresholds_.tolist(), "y": iso.y_thresholds_.tolist(), "increasing": bool(iso.increasing_)}
     return iso_map, float(r2_score(z[half:], apply_isotonic(h[half:], iso_map)))

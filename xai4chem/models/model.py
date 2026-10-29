@@ -50,6 +50,7 @@ RDLogger.DisableLog("rdApp.*")
 
 SLOPE_EPS = 1e-6
 GOLDEN_TOL = 1e-4
+GOLDEN_LABELLED = 4
 BATCH = 20000
 LIBRARY_THRESHOLD = 50000
 
@@ -334,6 +335,8 @@ class XAIModel(object):
             ``{column_name: dict}`` of arrays over molecules, plus ``"_valid"``: which SMILES parse.
         """
         smiles = list(smiles)
+        if not smiles:
+            raise ValueError("No molecules to score.")
         cols = self._select(columns)
         need_fps = any(c.hard is not None for c in cols) and self.featurizer.name != "morgan"
         X, valid, fps = self.features(smiles, fingerprints_too=need_fps, display=display)
@@ -426,7 +429,7 @@ class XAIModel(object):
             with h5py.File(targets, "r") as f:
                 target_rows, Z = f["rows"][:], f["Z"][:]
             for col in self.columns:
-                j = int(col.id[1:])  # Z has one column per soft-label column, skipped ones included
+                j = int(col.id[1:])  # Z has one column per soft-label column
                 by_row = np.full(len(library), np.nan, dtype=np.float32)
                 ok = target_rows >= 0
                 by_row[target_rows[ok]] = Z[ok, j]
@@ -435,23 +438,36 @@ class XAIModel(object):
         return {"T": T, "row": rows, "smiles": neighbours, "teacher": teacher}
 
     def _check_golden(self):
+        """Re-score the golden molecules; S, P and, with a hard head, H_S, T and ``a`` must all reproduce."""
         golden = read_json(self.dir / GOLDEN_NAME)
         res = self.scores(golden["smiles"])
         for name, expected in golden["columns"].items():
-            got = res[name]["P"]
-            if not np.allclose(got, expected["P"], atol=GOLDEN_TOL):
-                raise RuntimeError(
-                    f"Golden check failed for column {name!r}: this environment does not reproduce the model "
-                    f"(max deviation {np.max(np.abs(got - np.array(expected['P']))):.2e})."
-                )
+            for key, values in expected.items():
+                values = np.array(values, dtype=float)
+                got = res[name][key]
+                tol = GOLDEN_TOL * max(1.0, float(np.abs(values).max()))  # the teacher's scale is not 1
+                if not np.allclose(got, values, atol=tol):
+                    raise RuntimeError(
+                        f"Golden check failed for {key} of column {name!r}: this environment does not reproduce "
+                        f"the model (max deviation {np.max(np.abs(got - values)):.2e})."
+                    )
 
 
 def write_golden(model_dir):
+    """Record what a few molecules score, for :meth:`XAIModel._check_golden` to re-check on every load.
+
+    The molecules are some of the soft labels' and, for each hard head, some of its labelled molecules: only
+    those sit at T = 1, where the gate is open and H, its isotonic map and the labelled fingerprints take part.
+    """
     model = XAIModel(model_dir, check_golden=False)
-    smiles = model.manifest["golden_smiles"]
+    smiles = list(model.manifest["golden_smiles"])
+    for col in model.columns:
+        if col.hard is not None:
+            smiles += [s for s in col.hard.labelled_smiles[:GOLDEN_LABELLED] if s not in smiles]
     res = model.scores(smiles)
     res.pop("_valid")
+    keys = ("S", "P", "HS", "T", "a")
     write_json(
         Path(model_dir) / GOLDEN_NAME,
-        {"smiles": smiles, "columns": {name: {"S": r["S"].tolist(), "P": r["P"].tolist()} for name, r in res.items()}},
+        {"smiles": smiles, "columns": {n: {k: r[k].tolist() for k in keys if k in r} for n, r in res.items()}},
     )

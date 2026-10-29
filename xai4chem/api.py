@@ -72,6 +72,7 @@ def fit(
     force=False,
     seed=42,
     task="auto",
+    hard_columns=None,
     reweight="auto",
     n_estimators=None,
     panel_rows=None,
@@ -95,7 +96,11 @@ def fit(
     force : bool
         Overwrite an existing model in ``model_dir``.
     seed : int
-        Seed for the validation splits and the golden molecules.
+        Seed for XGBoost, the hard head's validation split and the golden molecules. S's own validation split
+        is value-stratified, as in Olinda, and so does not depend on it.
+    hard_columns : sequence of str, optional
+        Which columns of the hard-label file to use (default: every numeric column after the SMILES one).
+        Each must match a soft-label column.
     task : str
         Task of the hard labels: ``auto`` (binary if every label is 0 or 1, else regression), ``binary`` or
         ``regression``. Forcing ``binary`` on other values is refused.
@@ -105,7 +110,7 @@ def fit(
     n_estimators : int, optional
         Most boosting rounds for S (default 2,000, with early stopping).
     panel_rows : int, optional
-        Library panel molecules explained globally (default 2,000).
+        Library panel molecules explained globally (default 2,000, at most the library's panel).
     report : bool
         Write ``report.html``.
     display : xai4chem.progress.Display
@@ -122,7 +127,7 @@ def fit(
     from xai4chem.data.library import ReferenceLibrary
     from xai4chem.explain.panel import PANEL_ROWS, explain_panel
     from xai4chem.models.model import XAIModel
-    from xai4chem.models.surrogate import MIN_SOFT_ROWS, N_ESTIMATORS
+    from xai4chem.models.surrogate import N_ESTIMATORS
     from xai4chem.run import MANIFEST_NAME
 
     started = time.time()
@@ -136,57 +141,64 @@ def fit(
     smiles, Y = read_labels(soft_labels)
     mapping, hard = {}, None
     if hard_labels is not None:
-        # Fail on a column mismatch now, not after minutes of boosting
-        hard = read_labels(hard_labels)
-        trainable = [str(c) for c in Y.columns if Y[c].notna().sum() >= MIN_SOFT_ROWS]
-        mapping = match_hard_columns(trainable, [str(c) for c in hard[1].columns], strict=False)
-        if not mapping:
-            raise ValueError(
-                f"No column of {hard_labels} ({', '.join(map(str, hard[1].columns))}) matches a soft-label column "
-                f"({', '.join(map(str, Y.columns))}). Names must match exactly (case included), or as a prefix."
-            )
+        # Fail on a column mismatch or an unusable column now, not after minutes of boosting
         from xai4chem.models.hard import check_hard_labels, resolve_task
+        from xai4chem.models.model import valid_mask
 
-        for hard_name in mapping:  # refuse a bad --task now, not after minutes of boosting
+        hard = read_labels(hard_labels, label_cols=hard_columns)
+        mapping = match_hard_columns([str(c) for c in Y.columns], [str(c) for c in hard[1].columns])
+        usable = valid_mask(hard[0])  # the same rows the head is trained on: a SMILES RDKit cannot parse is dropped
+        for hard_name in mapping:
             y = hard[1][hard_name].to_numpy(dtype=np.float64)
-            y = y[np.isfinite(y)]
+            y = y[np.isfinite(y) & usable]
             check_hard_labels(hard_name, y, resolve_task(y, task, f"hard column '{hard_name}'"))
     total = 5 if hard_labels is not None else 4
     if not report:
         total -= 1
 
     display.step(1, total, "Reading soft labels")
+    from xai4chem.models.model import valid_mask
     from xai4chem.models.surrogate import check_target
 
+    rows = align_to_library(smiles, library)
+    unknown = np.where(rows < 0)[0]
+    bad = unknown[~valid_mask([smiles[i] for i in unknown])]
+    if len(bad):  # a molecule RDKit cannot parse has no features, so it cannot be learned from
+        display.note(f"{len(bad):,} soft-label SMILES could not be parsed and are left out", "warning")
+        keep = np.setdiff1d(np.arange(len(smiles)), bad)
+        smiles, rows, Y = [smiles[i] for i in keep], rows[keep], Y.iloc[keep].reset_index(drop=True)
     for name in Y.columns:  # refuse an unlearnable column now, before any work (Olinda's checks)
         for warning in check_target(str(name), Y[name].to_numpy(dtype=np.float64)):
             display.note(warning, "warning")
     display.note(f"{_plural(len(smiles), 'molecule')} · {_plural(Y.shape[1], 'column')} · {feat.description}")
-    rows = align_to_library(smiles, library)
     display.note(f"{int((rows >= 0).sum()):,} of them in the {library.name} reference library")
     X = load_features(smiles, rows, library, feat, display)
 
-    display.step(2, total, "Learning S, the surrogate of the teacher")
-    model_dir.mkdir(parents=True, exist_ok=True)
-    Z, columns = _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators or N_ESTIMATORS, display)
-    _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns, seed)
+    try:
+        display.step(2, total, "Learning S, the surrogate of the teacher")
+        model_dir.mkdir(parents=True, exist_ok=True)
+        Z, columns = _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators or N_ESTIMATORS, display)
+        _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns, seed)
 
-    if hard_labels is not None:
-        display.step(3, total, "Learning H from the hard labels")
-        _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, task, display)
+        if hard_labels is not None:
+            display.step(3, total, "Learning H from the hard labels")
+            _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, task, display)
 
-    step = 4 if hard_labels is not None else 3
-    display.step(step, total, "Explaining the library panel")
-    model = XAIModel(model_dir, check_golden=False)
-    summaries = explain_panel(model, library, rows=panel_rows or PANEL_ROWS, display=display)
+        step = 4 if hard_labels is not None else 3
+        display.step(step, total, "Explaining the library panel")
+        model = XAIModel(model_dir, check_golden=False)
+        summaries = explain_panel(model, library, rows=panel_rows or PANEL_ROWS, display=display)
 
-    out = None
-    if report:
-        from xai4chem.report.model_report import write_report
+        out = None
+        if report:
+            from xai4chem.report.model_report import write_report
 
-        display.step(step + 1, total, "Writing the report")
-        out = write_report(model_dir)
-    return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
+            display.step(step + 1, total, "Writing the report")
+            out = write_report(model_dir)
+        return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
+    except BaseException:  # a half-written model would load, soft-only, without a word
+        shutil.rmtree(model_dir, ignore_errors=True)
+        raise
 
 
 def _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators, display):
@@ -319,7 +331,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
 
     from xai4chem.models import hard as hd
     from xai4chem.models.model import write_golden
-    from xai4chem.models.surrogate import contributions, predict_margin
+    from xai4chem.models.surrogate import predict_margin
     from xai4chem.run import hard_dir
 
     smiles, Y = hard
@@ -352,7 +364,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
             ok = np.random.default_rng(seed).permutation(ok)[: hd.ISOTONIC_ROWS]
             table.status("calibrating H → S")
             iso_map, alignment_r2 = hd.fit_isotonic(predict_margin(booster, X[ok], feat.sparse), Z[ok, j])
-            a_max = hd.blend_ceiling(alignment_r2)
+            a_max = hd.blend_ceiling(alignment_r2, task)
 
             meta = {
                 "name": soft_name,
@@ -362,13 +374,12 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 "n_positive": int((y == 1).sum()) if task == "binary" else None,
                 "heldout": heldout,
                 "n_trees": int(booster.num_boosted_rounds()),
-                "base_h": float(contributions(booster, Xh[:1], feat.sparse)[0, -1]),
                 "isotonic_direction": "increasing" if iso_map["increasing"] else "decreasing",
                 "alignment_r2": alignment_r2,
                 "a_max": a_max,
                 "t_lo": hd.T_LO,
                 "t_hi": hd.T_HI,
-                "a_ceiling": hd.A_CEILING,
+                "a_ceiling": hd.A_CEILING_REGRESSION if task == "regression" else hd.A_CEILING,
                 "seed": seed,
             }
             labelled = pd.DataFrame({"smiles": [smiles[i] for i in idx], "label": y})
@@ -434,6 +445,8 @@ def explain(model, smiles, output_dir="explanations", ids=None, domain=False, di
     model = _load(model)
     smiles = [str(s) for s in smiles]
     ids = [str(i) for i in ids] if ids is not None else [f"mol_{i:04d}" for i in range(len(smiles))]
+    if len(ids) != len(smiles):
+        raise ValueError(f"{len(ids)} ids for {len(smiles)} molecules: pass one id per molecule.")
     output_dir = Path(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     cols, feat = model.columns, model.featurizer

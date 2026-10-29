@@ -73,7 +73,7 @@ def contributions(booster, X, sparse):
     return booster.predict(dmatrix(X, sparse), pred_contribs=True)
 
 
-def split_indices(y, val_frac=VAL_FRAC, seed=42):
+def split_indices(y, val_frac=VAL_FRAC):
     """Value-stratified train/validation split, as in Olinda: validation is taken at equally spaced value ranks.
 
     Rows are ordered by value, every k-th goes to validation, and the validation set therefore covers the
@@ -133,7 +133,7 @@ def check_target(name, y):
 
 
 def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL_FRAC, on_round=None, reweight="auto"):
-    """Fit with early stopping on a random validation split.
+    """Fit with early stopping on a value-stratified validation split (:func:`split_indices`).
 
     Returns the trimmed booster, the validation rows, the parameters and the reweighting that was used.
     The weights (see :mod:`xai4chem.models.weights`) come from the training rows and apply to training and
@@ -141,7 +141,7 @@ def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL
     """
     import xgboost as xgb
 
-    trn, val = split_indices(y, val_frac, seed)
+    trn, val = split_indices(y, val_frac)
     Xm = to_model_input(X, sparse)
     edges, weights, reweight_info = resolve_weights(y[trn], reweight)
     w_trn = w_val = None

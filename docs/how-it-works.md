@@ -18,8 +18,7 @@ rather than hiding:
 - **Vocabulary.** S can only use the features it is given. A teacher may rely on something the featurizer
   cannot express, and the explanations will then point at proxies.
 - **Correlation.** SHAP values say how S uses features, not what causes activity. Correlated features
-  share credit. `--stability` retrains S with a second seed and reports how stable the global importances
-  are.
+  share credit. Check the global importances against what you know of the chemistry before reading much into one feature.
 
 ## The models (Olinda's letters)
 
@@ -30,7 +29,7 @@ rather than hiding:
 | **H_S** | H carried onto S's scale by isotonic regression, fitted on library molecules where both H's score and the teacher's output exist. The direction is learned |
 | **T** | Exact Tanimoto similarity (binary Morgan, radius 3, 2048 bits) to the nearest labelled molecule |
 | **a** | `a_max · ramp(T)`: 0 below T = 0.4, rising to `a_max` at T = 0.7 (Olinda's constants) |
-| **a_max** | Earned from the R² of H_S against the teacher on library molecules held out from the isotonic fit. Capped at 0.66, and 0 below 0.1 (the column then stays soft-only) |
+| **a_max** | Earned from the R² of H_S against the teacher on library molecules held out from the isotonic fit. Capped at 0.4 for a classifier and 0.25 for a regressor (Olinda's ceilings), and 0 below 0.1 (the column then stays soft-only) |
 | **P** | `(1 − a)·S + a·H_S` |
 
 Training uses Olinda's tuned defaults:

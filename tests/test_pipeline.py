@@ -256,6 +256,92 @@ def test_unlearnable_teacher_columns_are_refused_before_training(library, tmp_pa
         assert not (tmp_path / name).exists()
 
 
+def test_unparseable_soft_smiles_are_left_out(library, tmp_path):
+    """A molecule RDKit cannot parse has no features, so it must not be learned from as an all-zero row."""
+    root, lib = library
+    soft = pd.read_csv(root / "soft.csv")
+    junk = pd.DataFrame({"smiles": ["not_a_smiles", "C(C"], "activity": [0.9, 0.1], "noisy": [0.9, 0.1]})
+    pd.concat([soft, junk], ignore_index=True).to_csv(tmp_path / "soft_junk.csv", index=False)
+    api.fit(tmp_path / "soft_junk.csv", tmp_path / "m", library_dir=lib, n_estimators=60, report=False)
+    import h5py
+
+    with h5py.File(tmp_path / "m" / "targets.h5") as f:
+        assert len(f["rows"]) == len(soft)
+
+
+def test_a_leading_id_column_is_not_a_label(library, tmp_path):
+    root, lib = library
+    soft = pd.read_csv(root / "soft.csv")
+    soft.insert(0, "id", range(len(soft)))
+    soft.to_csv(tmp_path / "soft_id.csv", index=False)
+    api.fit(tmp_path / "soft_id.csv", tmp_path / "m", library_dir=lib, n_estimators=60, report=False)
+    assert XAIModel(tmp_path / "m").column_names == ["activity", "noisy"]
+
+
+def test_hard_columns_must_match_a_soft_column_unless_picked(library, tmp_path):
+    root, lib = library
+    hard = pd.read_csv(root / "hard.csv")
+    hard["year"] = 2020
+    hard.to_csv(tmp_path / "hard_year.csv", index=False)
+    args = ["fit", "-s", root / "soft.csv", "-h", tmp_path / "hard_year.csv", "--library-dir", lib]
+    fails(args + ["-m", tmp_path / "a"], "'year' matches no soft column")
+    run(args + ["-m", tmp_path / "b", "--hard-columns", "activity", "--n-estimators", "60", "--no-report"])
+    assert XAIModel(tmp_path / "b").column("activity").hard is not None
+
+
+def test_regression_hard_labels_do_not_depend_on_their_unit(library, tmp_path):
+    """Olinda divides regression labels by their mean absolute value; labels of order 1e-7 must still be learned."""
+    from .conftest import teacher
+
+    root, lib = library
+    take = pd.read_csv(root / "soft.csv").sample(150, random_state=3)
+    base = teacher(take.smiles.tolist())
+    a_max = []
+    for unit in (10.0, 1e-7):
+        pd.DataFrame({"smiles": take.smiles, "activity": base * unit}).to_csv(
+            tmp_path / f"hard_{unit}.csv", index=False
+        )
+        out = tmp_path / f"m_{unit}"
+        api.fit(root / "soft.csv", out, tmp_path / f"hard_{unit}.csv", library_dir=lib, n_estimators=80, report=False)
+        a_max.append(XAIModel(out).column("activity").hard.meta["a_max"])
+    assert a_max[0] > 0 and a_max[1] == pytest.approx(a_max[0], abs=0.05)
+
+
+def test_a_failed_fit_leaves_no_half_written_model(library, tmp_path, monkeypatch):
+    root, lib = library
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("interrupted")
+
+    monkeypatch.setattr(api, "_learn_hard", boom)
+    with pytest.raises(RuntimeError, match="interrupted"):
+        api.fit(root / "soft.csv", tmp_path / "m", root / "hard.csv", library_dir=lib, n_estimators=60, report=False)
+    assert not (tmp_path / "m").exists()
+
+
+def test_the_golden_check_covers_the_hard_head(fitted, tmp_path):
+    """A model whose H, isotonic map or labelled set no longer reproduces must refuse to load."""
+    import shutil
+
+    _, model_dir, _ = fitted
+    broken = tmp_path / "broken"
+    shutil.copytree(model_dir, broken)
+    iso_path = broken / "columns" / "c0" / "_hard" / "h_to_s.json"
+    iso = json.loads(iso_path.read_text())
+    iso["y"] = [v + 0.2 for v in iso["y"]]
+    iso_path.write_text(json.dumps(iso))
+    with pytest.raises(RuntimeError, match="Golden check failed"):
+        XAIModel(broken)
+
+
+def test_empty_input_is_refused_clearly(fitted):
+    _, model_dir, _ = fitted
+    with pytest.raises(ValueError, match="No molecules"):
+        XAIModel(model_dir).predict([])
+    with pytest.raises(ValueError, match="one id per molecule"):
+        api.explain(model_dir, ["CCO", "CCN"], ids=["only_one"])
+
+
 def test_friendly_refusals(library, tmp_path):
     root, lib = library
     soft = pd.read_csv(root / "soft.csv")
@@ -271,7 +357,7 @@ def test_friendly_refusals(library, tmp_path):
     )
     fails(
         ["fit", "-s", root / "soft.csv", "-h", tmp_path / "hard_bad.csv", "--library-dir", lib, "-m", tmp_path / "b"],
-        "matches a soft-label column",
+        "matches no soft column",
     )
     assert not (tmp_path / "b" / "manifest.json").exists()  # refused before any training
     fails(["setup", "--library", tmp_path / "no_smiles.csv", "--library-dir", lib], "already holds the library")

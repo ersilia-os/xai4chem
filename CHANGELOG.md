@@ -23,6 +23,14 @@
   importances, effects, and for a hard head its ROC or agreement, the H → S map and its reach), written as PNG and
   vector PDF under `figures/` and embedded in `report.html`, with `metrics.json` and `performance_table.csv`
   beside it. Fidelity now also reports MAE and Pearson r. `matplotlib` and `stylia` are dependencies again.
+- Review fixes: soft-label SMILES RDKit cannot parse are left out instead of learned as all-zero rows; a leading
+  `id` or `key` column is no longer a label (labels are the numeric columns after `smiles`, as in Olinda);
+  hard columns that match no soft column are an error, and `fit --hard-columns` picks which to use; a
+  regression head trains on labels divided by their mean absolute value (Olinda), so a unit of 1e-7 works; the
+  gate ceilings are Olinda's, 0.4 for a classifier and 0.25 for a regressor (they were 0.66); the isotonic
+  direction no longer leaks sklearn warnings; the golden check also covers S, H_S, T and `a`, on labelled
+  molecules too, with a tolerance relative to the teacher's scale; a failed `fit` removes its half-written
+  model; `predict` on no molecules and `explain` with the wrong number of ids give clear errors.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 ## 1.1.0
@@ -75,7 +83,7 @@ optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/mi
 - Fast scoring: library features reused, dense-BLAS Tanimoto. No process or thread pools besides XGBoost's.
 - Golden vectors re-checked on load.
 - Friendly errors.
-- ruff, pre-commit, GitHub Actions on Python 3.10 and 3.12, and a test suite on a synthetic library.
+- ruff, pre-commit, GitHub Actions, and a test suite on a synthetic library.
 
 **Removed**
 - The 1.0 `Regressor` and the old CLI commands (`explain_global`, `explain_mols`).

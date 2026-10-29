@@ -20,7 +20,8 @@ def test_rescale_rule_is_exact_for_a_decreasing_map():
 
 def test_gate_and_ceiling():
     assert ramp(0.2) == 0 and ramp(0.7) == 1 and 0 < ramp(0.55) < 1
-    assert blend_ceiling(0.95) == A_CEILING
+    assert blend_ceiling(0.95) == A_CEILING == 0.4
+    assert blend_ceiling(0.95, "regression") == 0.25
     assert blend_ceiling(A_MIN / 2) == 0.0
     assert blend_ceiling(float("nan")) == 0.0
     assert blend_ceiling(-0.3) == 0.0
