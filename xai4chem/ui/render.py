@@ -61,7 +61,7 @@ def comparison(pair, ids):
     a, b = (escape(str(i)) for i in ids)
     gate = f" · gate term {pair['gate']:+.2f}" if abs(pair["gate"]) >= 0.005 else ""
     echo(
-        f"[bold]{escape(pair['column'])}[/] · {a} {pair['prob'][0]:.3f} vs {b} {pair['prob'][1]:.3f} · "
+        f"[bold]{escape(pair['column'])}[/] · {a} {pair['P'][0]:.3f} vs {b} {pair['P'][1]:.3f} · "
         f"gap {pair['gap']:+.2f} on the model's scale{gate}",
         "run",
     )

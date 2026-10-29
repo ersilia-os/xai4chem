@@ -57,7 +57,7 @@ def card(featurizer, cols, res, i, mol_id, smi, mol, x_row, neighbour=None):
         r = res[col.name]
         hard = col.hard is not None
         stats = [
-            H.stat("Prediction", f"{r['prob'][i]:.3f}", f"{col.name} · teacher scale"),
+            H.stat("Prediction", f"{r['P'][i]:.3f}", f"{col.name} · teacher scale"),
             H.stat("S", f"{r['S'][i]:.3f}", "teacher surrogate"),
         ]
         if hard:
@@ -108,8 +108,8 @@ def comparison(featurizer, col, pair, res, mols, ids):
     """Why the first molecule scores above or below the second, as exact attribution differences."""
     a, b = (H.esc(i) for i in ids)
     stats = [
-        H.stat(f"Prediction · {a}", f"{pair['prob'][0]:.3f}", "teacher scale"),
-        H.stat(f"Prediction · {b}", f"{pair['prob'][1]:.3f}", "teacher scale"),
+        H.stat(f"Prediction · {a}", f"{pair['P'][0]:.3f}", "teacher scale"),
+        H.stat(f"Prediction · {b}", f"{pair['P'][1]:.3f}", "teacher scale"),
         H.stat("Gap", f"{pair['gap']:+.2f}", "model scale", tip="P(first) − P(second) on the model's scale"),
     ]
     if pair["a"] is not None and abs(pair["gate"]) >= 0.005:

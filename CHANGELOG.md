@@ -1,7 +1,12 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
+A rewrite around the logic of [Olinda](https://github.com/ersilia-os/olinda). xai4chem now explains a
+surrogate of a teacher model, learned from soft labels over Ersilia's 1.36M-molecule reference library, and
+optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/migrating-from-1.0.md).
+
+**Behaviour and inputs** (aligned with Olinda 1.4)
 - Python 3.12 and above (tested on 3.12, 3.13 and 3.14); the 3.10 and 3.11 support is dropped.
 - Dependencies re-pinned exactly to current releases that ship wheels for these Pythons (pandas 3,
   numpy 2.5, scikit-learn 1.9, xgboost 3.4, RDKit 2026.9, datamol 0.13). Models fitted with the earlier
@@ -35,12 +40,6 @@
   and ceiling in `hard_meta.json`, as Olinda does.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
-## 1.1.0
-
-A rewrite around the logic of [Olinda](https://github.com/ersilia-os/olinda). xai4chem now explains a
-surrogate of a teacher model, learned from soft labels over Ersilia's 1.36M-molecule reference library, and
-optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/migrating-from-1.0.md).
-
 **Models**
 - S: XGBoost surrogate of the teacher.
   - Sparse count features (zeros are missing).
@@ -62,7 +61,7 @@ optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/mi
   - top substructures
   - the hard head's held-out metric, calibration and reach
   - training details
-  - figures as small inline SVG charts
+  - stylia figures, embedded as PNG and also written as PDF
 - Molecule gallery (`explain`):
   - teacher, experiments, combined and disagreement atom maps
   - present and absent features

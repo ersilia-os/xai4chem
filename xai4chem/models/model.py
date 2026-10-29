@@ -198,7 +198,7 @@ class XAIModel(object):
         -------
         dict
             ``{column_name: dict}`` of arrays over molecules: ``S``, ``phi_S``, ``base_S``, ``P``, ``phi_P``,
-            ``base_P`` and ``prob`` (P on the teacher's scale). Columns with a hard head also get ``h``,
+            ``base_P`` (P is on the teacher's scale). Columns with a hard head also get ``h``,
             ``phi_H``, ``base_H``, ``HS``, ``phi_HS``, ``base_HS``, ``T``, ``a``, ``nearest`` and ``flat``
             (molecules whose H attribution could not be rescaled).
         """
@@ -243,7 +243,6 @@ class XAIModel(object):
                 )
             else:
                 r.update({"P": r["S"], "phi_P": r["phi_S"], "base_P": r["base_S"]})
-            r["prob"] = r["P"]
             out[col.name] = r
         return out
 

@@ -96,6 +96,8 @@ def explain_panel(model, library, rows=PANEL_ROWS, display=SILENT):
     """Global explanations for every column of ``model``, over the first ``rows`` panel molecules."""
     featurizer = model.featurizer
     panel = library.panel()[:rows]
+    if len(panel) < rows:
+        display.note(f"the library's panel holds {len(panel):,} molecules, so that is what is explained", "warning")
     labels, names = featurizer.labels(), featurizer.feature_names
     collisions = None
     if featurizer.name == "morgan" and featurizer.bit_dictionary is not None:

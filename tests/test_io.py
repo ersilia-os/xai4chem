@@ -29,3 +29,16 @@ def test_hard_columns_match_by_name_or_prefix():
         match_hard_columns(soft, ["solubility"])
     with pytest.raises(ValueError):
         match_hard_columns(["a_x", "a_y"], ["a"])
+
+
+def test_an_unpublished_library_says_so(tmp_path, monkeypatch):
+    from urllib.error import HTTPError
+
+    from xai4chem.data import build
+
+    def forbidden(url):
+        raise HTTPError(url, 403, "Forbidden", None, None)
+
+    monkeypatch.setattr(build, "urlopen", forbidden)
+    with pytest.raises(FileNotFoundError, match="not published there"):
+        build.download_library(tmp_path, ["morgan"])

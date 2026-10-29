@@ -92,7 +92,7 @@ def test_predict_matches_explain(fitted):
     res = model.explain(QUERIES)
     pred = model.predict(QUERIES + ["not a smiles"], details=True)
     for col in model.columns:
-        np.testing.assert_allclose(pred[col.name].to_numpy()[:3], res[col.name]["prob"], atol=1e-5)
+        np.testing.assert_allclose(pred[col.name].to_numpy()[:3], res[col.name]["P"], atol=1e-5)
     assert not pred["valid"].iloc[3] and pred.iloc[3, 2:].isna().all()
 
 

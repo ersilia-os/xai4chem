@@ -18,7 +18,7 @@ def prediction_rows(cols, res, ids, smiles, valid):
     df = pd.DataFrame({"id": ids, "smiles": smiles, "valid": valid})
     for col in cols:
         r = res[col.name]
-        df[col.name] = r["prob"]
+        df[col.name] = r["P"]
         df[f"{col.name}_S"] = r["S"]
         if col.hard is not None:
             hh = col.hard
@@ -84,10 +84,10 @@ def compare_pair(col, r, X, mols, featurizer):
                 "diff": float(d[f]),
             }
         )
-    prob = r["P"]
+    pred = r["P"]
     return {
         "column": col.name,
-        "prob": (float(prob[0]), float(prob[1])),
+        "P": (float(pred[0]), float(pred[1])),
         "gap": gap,
         "gate": gate,
         "residual": gap - gate - float(d.sum()),

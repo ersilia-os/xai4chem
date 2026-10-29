@@ -40,7 +40,6 @@ model.predict(smiles, details=True)      # DataFrame: P (teacher scale) per colu
 res = model.explain(smiles)["qed"]
 res["S"], res["phi_S"], res["base_S"]    # surrogate, its TreeSHAP values (n × features), base value
 res["P"], res["phi_P"], res["base_P"]    # blended prediction and its exact attribution
-res["prob"]                              # P on the teacher's scale
 # with a hard head:
 res["HS"], res["phi_HS"], res["T"], res["a"], res["nearest"]
 

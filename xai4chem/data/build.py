@@ -268,8 +268,10 @@ def download_library(library_dir, featurizers, display=SILENT):
         with urlopen(f"{base}/{LIBRARY_JSON}") as response:
             remote = json.loads(response.read())
     except OSError as exc:  # urllib's HTTPError and URLError are OSErrors
+        unpublished = getattr(exc, "code", None) in (403, 404)
+        reason = "it is not published there (yet)" if unpublished else "check the connection"
         raise FileNotFoundError(
-            f"Could not reach the Ersilia reference library at {base} ({exc}). Check the connection, set "
+            f"Could not reach the Ersilia reference library at {base} ({exc}); {reason}. Set "
             "XAI4CHEM_LIBRARY_URL to a mirror, or build a library from your own SMILES with "
             "`xai4chem setup --library my_smiles.csv`."
         ) from exc

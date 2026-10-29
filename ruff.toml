@@ -38,7 +38,7 @@ line-length = 120
 extend-exclude = ["xai4chem/tools"]
 indent-width = 4
 
-target-version = "py310"
+target-version = "py312"
 
 [lint]
 select = ["D101", "D102", "E4", "E9", "F", "I", "W"]
