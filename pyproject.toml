@@ -1,27 +1,41 @@
 [tool.poetry]
 name = "xai4chem"
-version = "1.0.0"
-description = "XAI4Chem is an explainable AI package for chemistry"
+version = "2.0.0"
+description = "Explainable surrogates of chemistry models, learned from soft labels over Ersilia's reference library"
 authors = ["Ersilia Open Source Initiative <hello@ersilia.io>", "Jason Hlozek <jason.hlozek@uct.ac.za>", "Hellen Namulinda <hellennamulinda@gmail.com>", "Gemma Turon <gemma@ersilia.io>", "Miquel Duran-Frigola <miquel@ersilia.io>"]
+license = "GPL-3.0-only"
+readme = "README.md"
+repository = "https://github.com/ersilia-os/xai4chem"
+keywords = ["explainable-ai", "drug-discovery", "cheminformatics", "model-distillation", "ersilia"]
+include = ["xai4chem/report/assets/*.css", "xai4chem/tools/accfg/*.csv"]
 
+# Pinned exactly (Ersilia house rule). Models carry golden vectors that are re-scored on load, so a
+# drifting dependency that changes predictions is caught rather than silently trusted.
 [tool.poetry.dependencies]
-scikit-learn  = ">=1.6.1"
-datamol       = ">=0.12.5"
-rdkit         = ">=2024.3.6"
-shap          = ">=0.47.0"
-xgboost       = ">=2.0.0"
-optuna        = ">=4.4.0"
-pandas        = ">=2.3.0"
-matplotlib    = ">=3.10.8"
-seaborn       = ">=0.13.2"
+python        = ">=3.10,<3.13"
+numpy         = "2.2.6"
+scipy         = "1.15.3"
+pandas        = "2.3.0"
+scikit-learn  = "1.6.1"
+xgboost       = "2.0.0"
+h5py          = "3.16.0"
+rdkit         = "2024.3.6"
+datamol       = "0.12.5"
+click         = "8.4.2"
+rich          = "14.1.0"
+rich-click    = "1.9.8"
+loguru        = "0.7.3"
 
+[tool.poetry.group.dev.dependencies]
+pytest = "9.1.1"
+ruff   = "0.15.20"
 
 [tool.poetry.scripts]
-xai4chem = "xai4chem.cli:cli"
+xai4chem = "xai4chem.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
 
 [build-system]
 requires    = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.setuptools.package-data]
-my_package = ["tools/accfg/*.csv"]

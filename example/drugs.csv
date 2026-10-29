@@ -1,0 +1,13 @@
+name,smiles
+paracetamol,CC(=O)Nc1ccc(O)cc1
+ibuprofen,CC(C)Cc1ccc(cc1)C(C)C(=O)O
+aspirin,CC(=O)Oc1ccccc1C(=O)O
+caffeine,Cn1cnc2c1c(=O)n(C)c(=O)n2C
+isoniazid,NNC(=O)c1ccncc1
+chloroquine,CCN(CC)CCCC(C)Nc1ccnc2cc(Cl)ccc12
+ciprofloxacin,OC(=O)c1cn(C2CC2)c2cc(N3CCNCC3)c(F)cc2c1=O
+metformin,CN(C)C(=N)N=C(N)N
+atorvastatin,CC(C)c1c(C(=O)Nc2ccccc2)c(-c2ccccc2)c(-c2ccc(F)cc2)n1CCC(O)CC(O)CC(=O)O
+imatinib,Cc1ccc(NC(=O)c2ccc(CN3CCN(C)CC3)cc2)cc1Nc1nccc(-c2cccnc2)n1
+artemisinin,CC1CCC2C(C)C(=O)OC3OC4(C)CCC1C32OO4
+sulfamethoxazole,Cc1cc(NS(=O)(=O)c2ccc(N)cc2)no1

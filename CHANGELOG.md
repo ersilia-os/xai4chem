@@ -1,0 +1,58 @@
+# Changelog
+
+## 2.0.0
+
+A rewrite around the logic of [Olinda](https://github.com/ersilia-os/olinda). xai4chem now explains a
+surrogate of a teacher model, learned from soft labels over Ersilia's 1.36M-molecule reference library, and
+optionally refines it with hard labels. See [docs/migrating-from-v1.md](docs/migrating-from-v1.md).
+
+**Models**
+- S: XGBoost surrogate of the teacher.
+  - Sparse count features (zeros are missing).
+  - Olinda's tuned defaults.
+  - Early stopping and trimming.
+- H, H_S and the gate: a hard-label model calibrated onto S by isotonic regression and blended near the
+  labelled chemistry. `a_max` is earned on held-out library molecules.
+- Exact merging of explanations: `φ_P = (1 − a)·φ_S + a·φ_HS`, with the DeepLIFT rescale rule for H_S.
+
+**Featurizers**
+- Morgan counts identical to Olinda's qmfp.
+- AccFG functional groups.
+- datamol descriptors.
+
+**Explanations**
+- Model report (`report.html`):
+  - fidelity
+  - global importances
+  - top substructures
+  - the hard head's held-out metric, calibration and reach
+  - training details
+  - figures as small inline SVG charts
+- Molecule gallery (`explain`):
+  - teacher, experiments, combined and disagreement atom maps
+  - present and absent features
+  - per-molecule Morgan bit names
+  - nearest labelled molecule, and with `--domain` the nearest library molecule
+  - with exactly two molecules, the gap split into exact per-feature differences
+- Morgan bit dictionary: SMARTS-style atom invariants and collision rates.
+
+**CLI and infrastructure**
+- Four commands: `setup`, `fit`, `explain`, `predict`. Each is a function in `xai4chem.api`, silent from
+  Python; lazy imports (`--help` in 0.1 s).
+- Olinda's console look: one rule and one summary panel per command, numbered steps, live tables and one
+  repainting status line. loguru diagnostics with `--verbose`.
+- Computation never prints: long functions report to a `display`, so the code splits into `data`,
+  `models`, `explain`, `report` and `ui`.
+- xai4chem's own reference library: `setup` downloads Ersilia's 1.36M molecules with every featurizer
+  precomputed (0.5 GB by default, checksummed; count matrices stored sparse), independent of Olinda's files.
+  Libraries of your own SMILES are built locally. Libraries are relocatable (eosvc).
+- datamol descriptors are the default featurizer.
+- Fast scoring: library features reused, dense-BLAS Tanimoto. No process or thread pools besides XGBoost's.
+- Golden vectors re-checked on load.
+- Friendly errors.
+- ruff, pre-commit, GitHub Actions on Python 3.10 and 3.12, and a test suite on a synthetic library.
+
+**Removed**
+- The v1 `Regressor` and the old CLI commands (`explain_global`, `explain_mols`).
+- The `shap`, `matplotlib`, `stylia`, `optuna` and `psutil` dependencies.
+- The v1 notebook.
