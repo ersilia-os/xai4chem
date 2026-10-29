@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Python 3.12 and above (tested on 3.12, 3.13 and 3.14); the 3.10 and 3.11 support is dropped.
+- Dependencies re-pinned exactly to current releases that ship wheels for these Pythons (pandas 3,
+  numpy 2.5, scikit-learn 1.9, xgboost 3.4, RDKit 2026.9, datamol 0.13). Models fitted with the earlier
+  pins carry golden vectors that are re-checked on load, so refit them if the check fails.
+- Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
+
 ## 1.1.0
 
 A rewrite around the logic of [Olinda](https://github.com/ersilia-os/olinda). xai4chem now explains a

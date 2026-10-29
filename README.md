@@ -38,7 +38,7 @@ molecule gets four views:
 ## Installation
 
 ```bash
-conda create -n xai4chem -c conda-forge python=3.10 -y
+conda create -n xai4chem -c conda-forge python=3.12 -y
 conda activate xai4chem
 pip install git+https://github.com/ersilia-os/xai4chem.git
 ```

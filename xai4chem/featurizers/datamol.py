@@ -51,7 +51,7 @@ class DatamolDescriptor(object):
         if self.columns is None:
             raise ValueError("The datamol featurizer has not been fitted.")
         df = datamol_featurizer(smiles).reindex(columns=self.columns)
-        X = df.to_numpy(dtype=np.float32)
+        X = df.to_numpy(dtype=np.float32, copy=True)  # pandas 3 hands out read-only views
         for j, m in enumerate(self.medians):
             X[np.isnan(X[:, j]), j] = m
         return X

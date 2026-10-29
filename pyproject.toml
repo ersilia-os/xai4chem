@@ -12,18 +12,18 @@ include = ["xai4chem/report/assets/*.css", "xai4chem/tools/accfg/*.csv"]
 # Pinned exactly (Ersilia house rule). Models carry golden vectors that are re-scored on load, so a
 # drifting dependency that changes predictions is caught rather than silently trusted.
 [tool.poetry.dependencies]
-python        = ">=3.10,<3.13"
-numpy         = "2.2.6"
-scipy         = "1.15.3"
-pandas        = "2.3.0"
-scikit-learn  = "1.6.1"
-xgboost       = "2.0.0"
+python        = ">=3.12"
+numpy         = "2.5.4"
+scipy         = "1.18.1"
+pandas        = "3.1.0"
+scikit-learn  = "1.9.1"
+xgboost       = "3.4.1"
 h5py          = "3.16.0"
-rdkit         = "2024.3.6"
-datamol       = "0.12.5"
-click         = "8.4.2"
-rich          = "14.1.0"
-rich-click    = "1.9.8"
+rdkit         = "2026.9.1"
+datamol       = "0.13.0"
+click         = "8.5.0"
+rich          = "15.0.0"
+rich-click    = "1.9.9"
 loguru        = "0.7.3"
 
 [tool.poetry.group.dev.dependencies]
