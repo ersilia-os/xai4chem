@@ -58,3 +58,40 @@ def test_fidelity_reports_the_tail_separately():
     f = fidelity(y, pred)
     assert f["top_decile_rmse"] == pytest.approx(2.0)
     assert f["rmse"] < f["top_decile_rmse"]
+
+
+def test_validation_split_is_value_stratified():
+    from xai4chem.models.surrogate import split_indices
+
+    y = np.random.default_rng(0).exponential(1.0, 1000)
+    trn, val = split_indices(y, 0.1)
+    assert len(val) == 100 and len(trn) == 900 and not set(trn) & set(val)
+    assert np.allclose(np.quantile(y[val], [0.1, 0.5, 0.9]), np.quantile(y, [0.1, 0.5, 0.9]), rtol=0.1)
+    assert y[val].min() == y.min() and y[val].max() == y.max()  # both extremes are validated
+
+
+def test_target_checks_follow_olinda():
+    from xai4chem.models.surrogate import check_target
+
+    assert check_target("a", np.random.default_rng(0).normal(size=2000)) == []
+    assert "noisy" in check_target("a", np.random.default_rng(0).normal(size=500))[0]
+    assert "non-finite" in check_target("a", np.r_[np.random.default_rng(0).normal(size=2000), np.nan])[0]
+    with pytest.raises(ValueError, match="at least 100"):
+        check_target("a", np.arange(50.0))
+    with pytest.raises(ValueError, match="constant"):
+        check_target("a", np.full(500, 2.0))
+
+
+def test_hard_label_limits_follow_olinda():
+    from xai4chem.models.hard import check_hard_labels
+
+    assert check_hard_labels("h", np.array([0.0, 0, 1, 1]), "binary") == []  # 4 rows, 2 of each, is enough
+    with pytest.raises(ValueError, match="usable row"):
+        check_hard_labels("h", np.array([0.0, 1, 1]), "binary")
+    with pytest.raises(ValueError, match="1 positive and 5 negative"):
+        check_hard_labels("h", np.array([0.0] * 5 + [1.0]), "binary")
+    with pytest.raises(ValueError, match="at least 20"):
+        check_hard_labels("h", np.linspace(0, 1, 10), "regression")
+    with pytest.raises(ValueError, match="single value"):
+        check_hard_labels("h", np.full(30, 0.7), "regression")
+    assert check_hard_labels("h", np.linspace(0, 1, 30), "regression") == []

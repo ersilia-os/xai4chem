@@ -3,8 +3,6 @@
 import numpy as np
 import pandas as pd
 
-from xai4chem.models.surrogate import inverse
-
 TOP_FEATURES = 20
 COMPARE_TOP = 12
 
@@ -20,10 +18,10 @@ def prediction_rows(cols, res, ids, smiles, valid):
     for col in cols:
         r = res[col.name]
         df[col.name] = r["prob"]
-        df[f"{col.name}_S"] = inverse(r["S"], col.transform)
+        df[f"{col.name}_S"] = r["S"]
         if col.hard is not None:
             hh = col.hard
-            df[f"{col.name}_HS"] = inverse(r["HS"], col.transform)
+            df[f"{col.name}_HS"] = r["HS"]
             df[f"{col.name}_T"] = r["T"]
             df[f"{col.name}_a"] = r["a"]
             df[f"{col.name}_nearest_smiles"] = [hh.labelled_smiles[j] if j >= 0 else None for j in r["nearest"]]
@@ -85,7 +83,7 @@ def compare_pair(col, r, X, mols, featurizer):
                 "diff": float(d[f]),
             }
         )
-    prob = inverse(r["P"], col.transform)
+    prob = r["P"]
     return {
         "column": col.name,
         "prob": (float(prob[0]), float(prob[1])),

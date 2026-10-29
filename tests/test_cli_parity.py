@@ -25,7 +25,6 @@ MAP = {
         "force": "force",
         "seed": "seed",
         "task": "task",
-        "transform": "scale",
         "reweight": "reweight",
         "n_estimators": "n_estimators",
         "panel_rows": "panel_rows",

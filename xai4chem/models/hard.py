@@ -24,8 +24,11 @@ T_LO = 0.4
 T_HI = 0.7
 A_CEILING = 0.66
 A_MIN = 0.1
-MIN_HARD_ROWS = 30
-MIN_PER_CLASS = 5
+# Olinda's limits (olinda/hard/labels.py): below them there is nothing to split, fit or calibrate against
+MIN_HARD_ROWS = 4
+MIN_REGRESSION_ROWS = 20
+MIN_PER_CLASS = 2
+WARN_HARD_ROWS = 100_000
 ISOTONIC_ROWS = 50_000
 VAL_FRAC = 0.2
 PARAMS = {"tree_method": "hist", "eta": 0.05, "max_depth": 6, "subsample": 0.8, "colsample_bytree": 0.5}
@@ -75,10 +78,55 @@ def resolve_task(y, task="auto", name="the hard labels"):
     return task
 
 
-def enough_labels(y, task):
+def check_hard_labels(name, y, task):
+    """Refuse a hard column that cannot be learned from, with Olinda's limits; warn about an unusually large one.
+
+    Parameters
+    ----------
+    name : str
+        The hard column's name, for the messages.
+    y : array-like
+        Its finite values.
+    task : str
+        ``binary`` or ``regression``.
+
+    Returns
+    -------
+    list of str
+        Warnings to show; empty when the column is fine.
+
+    Raises
+    ------
+    ValueError
+        With too few usable rows, too few of either class, or a single value.
+    """
+    y = np.asarray(y, dtype=np.float64)
     if len(y) < MIN_HARD_ROWS:
-        return False
-    return task != "binary" or min((y == 0).sum(), (y == 1).sum()) >= MIN_PER_CLASS
+        raise ValueError(f"hard column '{name}' has only {len(y)} usable row(s); at least {MIN_HARD_ROWS} needed")
+    if task == "binary":
+        n_pos = int((y == 1).sum())
+        n_neg = len(y) - n_pos
+        if min(n_pos, n_neg) < MIN_PER_CLASS:
+            raise ValueError(
+                f"hard column '{name}' has {n_pos} positive and {n_neg} negative row(s); at least {MIN_PER_CLASS} "
+                "of each are needed for a class-stratified split. Drop the column or supply more labels."
+            )
+    else:
+        if len(y) < MIN_REGRESSION_ROWS:
+            raise ValueError(
+                f"hard column '{name}' has {len(y)} usable row(s); a continuous column needs at least "
+                f"{MIN_REGRESSION_ROWS} to learn from. Supply more labels or drop the column."
+            )
+        if float(np.ptp(y)) == 0.0:
+            raise ValueError(
+                f"hard column '{name}' holds a single value ({y[0]:g}), so there is nothing to learn. Drop the column."
+            )
+    if len(y) > WARN_HARD_ROWS:
+        return [
+            f"{name}: {len(y):,} labelled molecules is a lot; the similarity gate compares each against the whole "
+            "library, so this will take a long time"
+        ]
+    return []
 
 
 def train_hard_model(X, y, task, sparse, seed=42):

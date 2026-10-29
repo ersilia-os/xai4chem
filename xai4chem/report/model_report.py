@@ -111,15 +111,11 @@ def _effects(plot_path):
 
 def _training_details(meta):
     rows = [
-        ["Scale", H.esc(meta["transform"])],
         ["Training rows", f"{meta['n_train']:,}"],
         ["Held-out rows", f"{meta['n_val']:,}"],
         ["Trees", f"{meta['n_trees']:,}"],
-        [
-            "Fidelity on the teacher's scale",
-            f"R² {_f(meta['fidelity_teacher_scale']['r2'])} · RMSE {_f(meta['fidelity_teacher_scale']['rmse'])}",
-        ],
-        ["Top-decile RMSE", _f(meta["fidelity_teacher_scale"]["top_decile_rmse"])],
+        ["Fidelity", f"R² {_f(meta['fidelity']['r2'])} · RMSE {_f(meta['fidelity']['rmse'])}"],
+        ["Top-decile RMSE", _f(meta["fidelity"]["top_decile_rmse"])],
         ["Reweighting", H.esc(f"{meta['reweight']['strategy']} ({meta['reweight']['reason']})")],
     ]
     rows += [[H.esc(k), H.esc(v)] for k, v in meta["params"].items()]
@@ -185,9 +181,8 @@ def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
     s = read_json(exp / "summary.json")
     meta = read_json(cdir / "soft_meta.json")
     fid, hard = s["fidelity"], s.get("hard")
-    scale = " · logit scale" if col["transform"] == "logit" else ""
     stats = [
-        H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules{scale}"),
+        H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules"),
         H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),
         H.stat("Top-decile RMSE", _f(fid["top_decile_rmse"]), "error on the teacher's highest 10%"),
     ]
@@ -204,7 +199,7 @@ def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
         data = np.load(cdir / FIDELITY_NAME)
         figs.append(
             H.figure(
-                svg.density(data["teacher"], data["surrogate"], f"Teacher{scale}", f"Surrogate S{scale}"),
+                svg.density(data["teacher"], data["surrogate"], "Teacher", "Surrogate S"),
                 "Teacher against S on held-out library molecules.",
             )
         )

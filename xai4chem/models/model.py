@@ -26,7 +26,7 @@ from xai4chem.data.library import BitDictionary
 from xai4chem.data.similarity import binarize, fingerprints, nearest
 from xai4chem.featurizers import featurizer_from_config
 from xai4chem.models.hard import apply_isotonic, ramp
-from xai4chem.models.surrogate import contributions, inverse, predict_margin
+from xai4chem.models.surrogate import contributions, predict_margin
 from xai4chem.progress import SILENT
 from xai4chem.run import (
     BIT_DICTIONARY_NAME,
@@ -95,7 +95,6 @@ class Column(object):
     def __init__(self, model_dir, entry):
         self.id = entry["id"]
         self.name = entry["name"]
-        self.transform = entry["transform"]
         self.dir = column_dir(model_dir, self.id)
         self.soft_meta = read_json(self.dir / SOFT_META_NAME)
         self.s = _load_booster(self.dir / S_NAME)
@@ -242,7 +241,7 @@ class XAIModel(object):
                 )
             else:
                 r.update({"P": r["S"], "phi_P": r["phi_S"], "base_P": r["base_S"]})
-            r["prob"] = inverse(r["P"], col.transform)
+            r["prob"] = r["P"]
             out[col.name] = r
         return out
 
@@ -379,11 +378,11 @@ class XAIModel(object):
         df = pd.DataFrame({"smiles": smiles})
         for col in self._select(columns):
             r = res[col.name]
-            df[col.name] = inverse(r["P"], col.transform)
+            df[col.name] = r["P"]
             if details:
-                df[f"{col.name}_S"] = inverse(r["S"], col.transform)
+                df[f"{col.name}_S"] = r["S"]
                 if "HS" in r:
-                    df[f"{col.name}_HS"] = inverse(r["HS"], col.transform)
+                    df[f"{col.name}_HS"] = r["HS"]
                     df[f"{col.name}_T"] = r["T"]
                     df[f"{col.name}_a"] = r["a"]
         df.loc[~res["_valid"], df.columns[1:]] = np.nan
@@ -431,7 +430,7 @@ class XAIModel(object):
                 by_row = np.full(len(library), np.nan, dtype=np.float32)
                 ok = target_rows >= 0
                 by_row[target_rows[ok]] = Z[ok, j]
-                teacher[col.name] = np.where(valid, inverse(by_row[rows], col.transform), np.nan)
+                teacher[col.name] = np.where(valid, by_row[rows], np.nan)
         neighbours = [library.smiles[i] if i >= 0 else None for i in rows]
         return {"T": T, "row": rows, "smiles": neighbours, "teacher": teacher}
 

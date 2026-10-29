@@ -13,8 +13,8 @@ out = xai4chem.explain("models/my_model", smiles, "explanations/") # predictions
 xai4chem.predict("models/my_model", smiles, "predictions.csv")
 ```
 
-`fit` also takes `seed`, `transform`, `n_estimators` and `panel_rows`, which the CLI leaves at their
-defaults.
+The CLI and the Python API take the same options (a test keeps them aligned): `fit` also takes `task`,
+`reweight`, `seed`, `n_estimators`, `panel_rows` and `report`.
 
 A model directory is loaded with `XAIModel`. Loading
 re-scores the model's golden molecules and refuses to continue if this environment does not reproduce them.

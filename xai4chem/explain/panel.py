@@ -135,7 +135,6 @@ def explain_panel(model, library, rows=PANEL_ROWS, display=SILENT):
                 "name": col.name,
                 "panel_size": int(len(panel)),
                 "fidelity": col.soft_meta["fidelity"],
-                "fidelity_teacher_scale": col.soft_meta["fidelity_teacher_scale"],
                 "top_features": tab.head(TOP)[["label", "mean_abs_shap", "direction"]].to_dict("records"),
             }
             cells = {"Top feature": str(tab.iloc[0]["label"])[:40]}

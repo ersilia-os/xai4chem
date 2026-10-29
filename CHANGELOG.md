@@ -7,13 +7,18 @@
   numpy 2.5, scikit-learn 1.9, xgboost 3.4, RDKit 2026.9, datamol 0.13). Models fitted with the earlier
   pins carry golden vectors that are re-checked on load, so refit them if the check fails.
 - Soft labels can be anything: S is fitted to the teacher's raw values on a squared-error objective and
-  explained on that scale, as in Olinda. The automatic logit scale for probabilities is gone (`transform="logit"` remains an explicit option in Python).
+  explained on that scale, as in Olinda, with no transformation of any kind. The logit scale for probabilities is gone.
 - Imbalanced soft-label targets are reweighted by inverse density (Olinda's rule, automatic per column);
   fidelity adds the top-decile RMSE.
 - `fit --task auto|binary|regression` for hard labels; forcing `binary` on non-binary values is refused before
   training. The non-binary task is now called `regression`, not `continuous`.
-- The CLI and the Python API expose the same options (tested): `fit` gains `--scale`, `--reweight`, `--n-estimators`,
+- The CLI and the Python API expose the same options (tested): `fit` gains `--reweight`, `--n-estimators`,
   `--panel-rows`, `--seed` and `--no-report`, `predict` gains `--details`, and `api.setup` gains `export_smiles`.
+- Soft-label inputs are checked as in Olinda: a column with fewer than 100 finite values, or a constant
+  one, is refused before any work (it used to be skipped); fewer than 1,000 rows or dropped non-finite
+  values are warned about. The validation split is value-stratified (equally spaced ranks), not random.
+- Hard-label inputs follow Olinda's limits: at least 4 usable rows (20 for a regression column, 2 of each class
+  for a binary one) and no single-valued columns, refused before training instead of left soft-only.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 ## 1.1.0

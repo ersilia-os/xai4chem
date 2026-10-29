@@ -2,7 +2,7 @@
 
     <model-dir>/
       manifest.json         featurizer config, library location, one entry per teacher column
-      targets.h5            the (transformed) soft labels, with their library rows (for the applicability check)
+      targets.h5            the soft labels, with their library rows (for the applicability check)
       bit_dictionary.json   copied from the library, so Morgan explanations are self-contained
       golden.json           a few molecules with expected outputs, re-checked when the model loads
       columns/<id>/

@@ -7,7 +7,6 @@ import pandas as pd
 
 from xai4chem.explain.atoms import atom_attributions
 from xai4chem.explain.tables import cosine
-from xai4chem.models.surrogate import inverse
 from xai4chem.report import html as H
 from xai4chem.report.drawing import atom_svg, prepare
 
@@ -59,10 +58,10 @@ def card(featurizer, cols, res, i, mol_id, smi, mol, x_row, neighbour=None):
         hard = col.hard is not None
         stats = [
             H.stat("Prediction", f"{r['prob'][i]:.3f}", f"{col.name} · teacher scale"),
-            H.stat("S", f"{inverse(r['S'][i], col.transform):.3f}", "teacher surrogate"),
+            H.stat("S", f"{r['S'][i]:.3f}", "teacher surrogate"),
         ]
         if hard:
-            stats.append(H.stat("H_S", f"{inverse(r['HS'][i], col.transform):.3f}", "experiments"))
+            stats.append(H.stat("H_S", f"{r['HS'][i]:.3f}", "experiments"))
             stats.append(H.stat("a", f"{r['a'][i]:.2f}", f"T = {r['T'][i]:.2f} to nearest labelled"))
         parts.append(f'<div class="eyebrow" style="margin-top:12px">{H.esc(col.name)}</div>{H.kpis(stats)}')
         views = _views(featurizer, col, r, i, mol)

@@ -1,8 +1,8 @@
 """S: the surrogate, a gradient-boosted regressor of the teacher's soft labels.
 
 Soft labels can be anything a teacher returns (scores, probabilities, concentrations), so, as in Olinda,
-S is fitted to the raw values with a squared-error objective and explained on that same scale. A ``logit``
-scale remains available explicitly, for teachers known to output probabilities. Training uses Olinda's tuned defaults:
+S is fitted to the raw values with a squared-error objective, with no transformation, and explained on that
+same scale. Training uses Olinda's tuned defaults:
 histogram trees with 64 bins (lossless for counts clipped at 15), depth 8, row and column subsampling, a
 ``min_child_weight`` that grows with the data, and early stopping, after which the booster is trimmed to
 its best iteration.
@@ -19,8 +19,8 @@ from scipy.stats import spearmanr
 
 from xai4chem.models.weights import apply_weights, resolve_weights
 
-EPS = 1e-4
 MIN_SOFT_ROWS = 100
+WARN_SOFT_ROWS = 1000
 VAL_FRAC = 0.1
 N_ESTIMATORS = 2000
 EARLY_STOPPING = 50
@@ -44,27 +44,6 @@ def n_threads(n_rows):
 def min_child_weight(n_rows):
     """Olinda uses 200 at ~1.3M rows; scale it down so small datasets can still grow trees."""
     return float(max(1.0, min(200.0, n_rows / 6500)))
-
-
-# --- scales -----------------------------------------------------------------------------------------
-
-
-def choose_transform(y, mode="auto"):
-    """The scale S learns on: ``auto`` is the raw values, whatever the teacher returns, as in Olinda."""
-    return "identity" if mode == "auto" else mode
-
-
-def forward(y, transform):
-    if transform == "logit":
-        y = np.clip(y, EPS, 1 - EPS)
-        return np.log(y / (1 - y))
-    return y
-
-
-def inverse(z, transform):
-    if transform == "logit":
-        return 1 / (1 + np.exp(-z))
-    return z
 
 
 # --- matrices and boosters --------------------------------------------------------------------------
@@ -94,6 +73,65 @@ def contributions(booster, X, sparse):
     return booster.predict(dmatrix(X, sparse), pred_contribs=True)
 
 
+def split_indices(y, val_frac=VAL_FRAC, seed=42):
+    """Value-stratified train/validation split, as in Olinda: validation is taken at equally spaced value ranks.
+
+    Rows are ordered by value, every k-th goes to validation, and the validation set therefore covers the
+    teacher's whole range instead of whatever a random draw happens to give.
+
+    Returns
+    -------
+    tuple of numpy.ndarray
+        Sorted ``train`` and ``val`` row indices.
+    """
+    y = np.asarray(y, dtype=np.float32)
+    m = len(y)
+    order = np.argsort(y, kind="stable")
+    n_val = max(1, min(int(round(m * val_frac)), m - 1))
+    is_val = np.zeros(m, dtype=bool)
+    is_val[order[np.unique(np.round(np.linspace(0, m - 1, n_val)).astype(np.int64))]] = True
+    return np.where(~is_val)[0], np.where(is_val)[0]
+
+
+def check_target(name, y):
+    """Refuse a column that cannot be learned and list warnings for one that barely can (Olinda's checks).
+
+    Parameters
+    ----------
+    name : str
+        The column's name, for the messages.
+    y : array-like
+        The teacher's values; non-finite ones are left out.
+
+    Returns
+    -------
+    list of str
+        Warnings to show; empty when the column is fine.
+
+    Raises
+    ------
+    ValueError
+        With fewer than :data:`MIN_SOFT_ROWS` finite values, or when every value is the same.
+    """
+    y = np.asarray(y, dtype=np.float32)
+    finite = y[np.isfinite(y)]
+    n = len(finite)
+    if n < MIN_SOFT_ROWS:
+        raise ValueError(
+            f"column '{name}' has {n} finite value(s); at least {MIN_SOFT_ROWS} are needed to train and validate on."
+        )
+    if finite.min() == finite.max():
+        raise ValueError(
+            f"column '{name}' is constant ({finite.min():g} on all {n:,} rows), so there is nothing to learn"
+        )
+    warnings = []
+    if n < WARN_SOFT_ROWS:
+        warnings.append(f"{name}: only {n:,} rows, so the validation split is small and results will be noisy")
+    if len(y) - n:
+        warnings.append(f"{name}: {len(y) - n:,} non-finite value(s) left out")
+    return warnings
+
+
 def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL_FRAC, on_round=None, reweight="auto"):
     """Fit with early stopping on a random validation split.
 
@@ -103,9 +141,7 @@ def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL
     """
     import xgboost as xgb
 
-    idx = np.random.default_rng(seed).permutation(len(y))
-    n_val = max(1, int(round(len(y) * val_frac)))
-    trn, val = np.sort(idx[n_val:]), np.sort(idx[:n_val])
+    trn, val = split_indices(y, val_frac, seed)
     Xm = to_model_input(X, sparse)
     edges, weights, reweight_info = resolve_weights(y[trn], reweight)
     w_trn = w_val = None
@@ -180,39 +216,31 @@ def fit_column(
     X,
     y,
     sparse,
-    transform="auto",
     seed=42,
     n_estimators=N_ESTIMATORS,
     val_frac=VAL_FRAC,
     on_round=None,
     reweight="auto",
 ):
-    """Learn S for one teacher column.
+    """Learn S for one teacher column, on its raw values (see :func:`check_target` for what is refused).
 
-    Returns ``None`` when the column has fewer than :data:`MIN_SOFT_ROWS` finite values, else a dict with
-    the booster, the scale, the rows used (``mask``), their model-scale targets (``z``), the training
-    metadata and the held-out (teacher, surrogate) pairs used for the fidelity figure.
+    Returns a dict with the booster, the rows used (``mask``), their targets (``y``), the training metadata
+    and the held-out (teacher, surrogate) pairs used for the fidelity figure.
     """
     mask = np.isfinite(y)
-    if mask.sum() < MIN_SOFT_ROWS:
-        return None
-    t = choose_transform(y, transform)
-    z = forward(y[mask], t)
+    y = y[mask]
     Xm = X[np.where(mask)[0]] if not mask.all() else X
     booster, val, params, reweight_info = train_booster(
-        Xm, z, sparse, seed=seed, n_estimators=n_estimators, val_frac=val_frac, on_round=on_round, reweight=reweight
+        Xm, y, sparse, seed=seed, n_estimators=n_estimators, val_frac=val_frac, on_round=on_round, reweight=reweight
     )
     pred = predict_margin(booster, Xm[val], sparse)
     meta = {
-        "transform": t,
         "n_train": int(mask.sum() - len(val)),
         "n_val": int(len(val)),
         "n_trees": int(booster.num_boosted_rounds()),
-        "fidelity": fidelity(z[val], pred),
-        "fidelity_teacher_scale": fidelity(inverse(z[val], t), inverse(pred, t)),
-        "constant": bool(np.ptp(z) == 0),
+        "fidelity": fidelity(y[val], pred),
         "seed": seed,
         "params": params,
         "reweight": reweight_info,
     }
-    return {"booster": booster, "transform": t, "mask": mask, "z": z, "meta": meta, "heldout": (z[val], pred)}
+    return {"booster": booster, "mask": mask, "y": y, "meta": meta, "heldout": (y[val], pred)}

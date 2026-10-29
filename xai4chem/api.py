@@ -72,7 +72,6 @@ def fit(
     force=False,
     seed=42,
     task="auto",
-    transform="auto",
     reweight="auto",
     n_estimators=None,
     panel_rows=None,
@@ -100,8 +99,6 @@ def fit(
     task : str
         Task of the hard labels: ``auto`` (binary if every label is 0 or 1, else regression), ``binary`` or
         ``regression``. Forcing ``binary`` on other values is refused.
-    transform : str
-        Scale S learns on: ``auto`` (the teacher's raw values, same as ``identity``) or ``logit`` (explicit, for probabilities).
     reweight : str
         Target reweighting for S: ``auto`` (only for an imbalanced target, as in Olinda), ``on``, ``off``,
         ``kde`` or ``bins``.
@@ -148,16 +145,22 @@ def fit(
                 f"No column of {hard_labels} ({', '.join(map(str, hard[1].columns))}) matches a soft-label column "
                 f"({', '.join(map(str, Y.columns))}). Names must match exactly (case included), or as a prefix."
             )
-        from xai4chem.models.hard import resolve_task
+        from xai4chem.models.hard import check_hard_labels, resolve_task
 
         for hard_name in mapping:  # refuse a bad --task now, not after minutes of boosting
             y = hard[1][hard_name].to_numpy(dtype=np.float64)
-            resolve_task(y[np.isfinite(y)], task, f"hard column '{hard_name}'")
+            y = y[np.isfinite(y)]
+            check_hard_labels(hard_name, y, resolve_task(y, task, f"hard column '{hard_name}'"))
     total = 5 if hard_labels is not None else 4
     if not report:
         total -= 1
 
     display.step(1, total, "Reading soft labels")
+    from xai4chem.models.surrogate import check_target
+
+    for name in Y.columns:  # refuse an unlearnable column now, before any work (Olinda's checks)
+        for warning in check_target(str(name), Y[name].to_numpy(dtype=np.float64)):
+            display.note(warning, "warning")
     display.note(f"{_plural(len(smiles), 'molecule')} · {_plural(Y.shape[1], 'column')} · {feat.description}")
     rows = align_to_library(smiles, library)
     display.note(f"{int((rows >= 0).sum()):,} of them in the {library.name} reference library")
@@ -165,7 +168,7 @@ def fit(
 
     display.step(2, total, "Learning S, the surrogate of the teacher")
     model_dir.mkdir(parents=True, exist_ok=True)
-    Z, columns = _learn_soft(X, Y, feat, model_dir, transform, reweight, seed, n_estimators or N_ESTIMATORS, display)
+    Z, columns = _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators or N_ESTIMATORS, display)
     _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns, seed)
 
     if hard_labels is not None:
@@ -186,15 +189,15 @@ def fit(
     return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
 
 
-def _learn_soft(X, Y, feat, model_dir, transform, reweight, seed, n_estimators, display):
-    """S per teacher column, in a live table. Returns the model-scale targets and the manifest's column entries."""
-    from xai4chem.models.surrogate import MIN_SOFT_ROWS, fit_column
+def _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators, display):
+    """S per teacher column, in a live table. Returns the teacher's values and the manifest's column entries."""
+    from xai4chem.models.surrogate import fit_column
     from xai4chem.run import FIDELITY_NAME, S_NAME, SOFT_META_NAME, column_dir, column_id, write_json
 
     Z = np.full(Y.shape, np.nan, dtype=np.float32)
     columns = []
     names = [str(c) for c in Y.columns]
-    with display.table(names, "Learning S", ["Scale", "Rows", "R²", "ρ", "Trees", "Time"]) as table:
+    with display.table(names, "Learning S", ["Rows", "R²", "ρ", "Trees", "Time"]) as table:
         for j, name in enumerate(names):
             table.start(name)
             col_started = time.time()
@@ -206,25 +209,15 @@ def _learn_soft(X, Y, feat, model_dir, transform, reweight, seed, n_estimators, 
                 X,
                 Y.iloc[:, j].to_numpy(dtype=np.float64),
                 feat.sparse,
-                transform,
                 seed,
                 n_estimators,
                 on_round=on_round,
                 reweight=reweight,
             )
-            if fitted is None:
-                n = int(Y.iloc[:, j].notna().sum())
-                table.finish(name, ok=False, Rows=f"{n:,}", Time="skipped")
-                display.note(
-                    f"{name}: only {n} soft labels (at least {MIN_SOFT_ROWS} needed); column skipped", "warning"
-                )
-                continue
             meta = {"name": name, **fitted["meta"]}
-            if meta["constant"]:
-                display.note(f"{name}: the teacher's output is constant; S will be too, and explain nothing", "warning")
             if meta["reweight"]["strategy"] != "none":
                 display.note(f"{name}: {meta['reweight']['strategy']} reweighting ({meta['reweight']['reason']})")
-            Z[fitted["mask"], j] = fitted["z"]
+            Z[fitted["mask"], j] = fitted["y"]
             cdir = column_dir(model_dir, column_id(j))
             cdir.mkdir(parents=True, exist_ok=True)
             fitted["booster"].save_model(str(cdir / S_NAME))
@@ -232,18 +225,15 @@ def _learn_soft(X, Y, feat, model_dir, transform, reweight, seed, n_estimators, 
             teacher, surrogate = fitted["heldout"]
             keep = np.random.default_rng(seed).permutation(len(teacher))[:FIDELITY_POINTS]
             np.savez_compressed(cdir / FIDELITY_NAME, teacher=teacher[keep], surrogate=surrogate[keep])
-            columns.append({"id": column_id(j), "name": name, "transform": meta["transform"]})
+            columns.append({"id": column_id(j), "name": name})
             fid = meta["fidelity"]
             table.finish(
                 name,
-                Scale=meta["transform"],
                 Rows=f"{meta['n_train'] + meta['n_val']:,}",
                 **{"R²": f"{fid['r2']:.3f}", "ρ": f"{fid['spearman']:.3f}"},
                 Trees=f"{meta['n_trees']:,}",
                 Time=f"{time.time() - col_started:.0f}s",
             )
-    if not columns:
-        raise ValueError(f"No soft-label column has at least {MIN_SOFT_ROWS} values.")
     return Z, columns
 
 
@@ -340,10 +330,8 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 Task=task,
                 Labels=f"{len(y):,}" + (f" ({int((y == 1).sum()):,} +)" if task == "binary" else ""),
             )
-            if not hd.enough_labels(y, task):
-                table.finish(hard_name, ok=False, **{"Held-out": "too few"}, Time=f"{time.time() - col_started:.0f}s")
-                display.note(f"{hard_name}: too few hard labels ({len(y)}); the column stays soft-only", "warning")
-                continue
+            for warning in hd.check_hard_labels(hard_name, y, task):
+                display.note(warning, "warning")
             Xh, fh = Xh_all[idx], fps_all[idx]
             table.status("fitting H")
             booster, heldout = hd.train_hard_model(Xh, y, task, feat.sparse, seed)

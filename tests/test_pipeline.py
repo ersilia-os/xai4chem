@@ -188,11 +188,11 @@ def test_fit_command(library, tmp_path):
 def test_fit_and_predict_options_reach_the_model(library, tmp_path):
     root, lib = library
     m = tmp_path / "m"
-    flags = ["--n-estimators", "80", "--panel-rows", "50", "--seed", "7", "--reweight", "off", "--scale", "identity"]
+    flags = ["--n-estimators", "80", "--panel-rows", "50", "--seed", "7", "--reweight", "off"]
     run(["fit", "-s", root / "soft.csv", "--library-dir", lib, "-m", m, "--no-report", *flags])
     assert not (m / "report.html").exists()
     meta = json.loads((m / "columns" / "c0" / "soft_meta.json").read_text())
-    assert meta["seed"] == 7 and meta["transform"] == "identity" and meta["reweight"]["strategy"] == "none"
+    assert meta["seed"] == 7 and meta["reweight"]["strategy"] == "none"
     assert meta["n_trees"] <= 80
     run(["predict", "-m", m, "-S", "CCO", "--details", "-o", tmp_path / "p.csv"])
     assert "activity_S" in pd.read_csv(tmp_path / "p.csv").columns
@@ -243,16 +243,15 @@ def test_soft_labels_outside_the_library(library, tmp_path):
     assert XAIModel(tmp_path / "m").column("activity").hard is not None
 
 
-def test_empty_teacher_column_is_skipped(library, tmp_path):
+def test_unlearnable_teacher_columns_are_refused_before_training(library, tmp_path):
+    """Olinda refuses an empty or constant column instead of skipping it, so no model is half-written."""
     root, lib = library
     soft = pd.read_csv(root / "soft.csv")
-    soft.insert(1, "broken", np.nan)  # before the real columns, so ids and positions would disagree
-    soft.to_csv(tmp_path / "soft_broken.csv", index=False)
-    api.fit(tmp_path / "soft_broken.csv", tmp_path / "m", root / "hard.csv", library_dir=lib, n_estimators=150)
-    model = XAIModel(tmp_path / "m")
-    assert model.column_names == ["activity", "noisy"]
-    assert model.column("activity").hard is not None
-    assert np.isfinite(model.library_neighbours(QUERIES[:1])["teacher"]["activity"][0])
+    for name, values, needle in (("broken", np.nan, "0 finite value(s)"), ("flat", 0.5, "is constant")):
+        path = tmp_path / f"soft_{name}.csv"
+        soft.assign(**{name: values}).to_csv(path, index=False)
+        fails(["fit", "-s", path, "--library-dir", lib, "-m", tmp_path / name], needle)
+        assert not (tmp_path / name).exists()
 
 
 def test_friendly_refusals(library, tmp_path):

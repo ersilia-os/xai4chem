@@ -35,13 +35,6 @@ from xai4chem.cli import options
     help="Task of the hard labels: binary if every label is 0 or 1, else regression. Forcing binary on other values is refused.",
 )
 @click.option(
-    "--scale",
-    default="auto",
-    show_default=True,
-    type=click.Choice(["auto", "identity", "logit"]),
-    help="Scale S learns on. `auto` is the teacher's raw values (same as `identity`); `logit` is for probabilities.",
-)
-@click.option(
     "--reweight",
     default="auto",
     show_default=True,
@@ -70,7 +63,6 @@ def fit_cmd(
     model_dir,
     featurizer,
     task,
-    scale,
     reweight,
     n_estimators,
     panel_rows,
@@ -96,7 +88,6 @@ def fit_cmd(
         force=force,
         seed=seed,
         task=task,
-        transform=scale,
         reweight=reweight,
         n_estimators=n_estimators,
         panel_rows=panel_rows,
