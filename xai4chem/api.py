@@ -26,7 +26,7 @@ def _plural(n, word):
 # --- setup ------------------------------------------------------------------------------------------
 
 
-def setup(source=None, featurizers=("datamol",), library_dir=None, force=False, display=SILENT):
+def setup(source=None, featurizers=("datamol",), library_dir=None, force=False, export_smiles=None, display=SILENT):
     """Download Ersilia's reference library, or build one from your own SMILES.
 
     Parameters
@@ -39,6 +39,8 @@ def setup(source=None, featurizers=("datamol",), library_dir=None, force=False, 
         Where the library lives (default ``~/.xai4chem/library``).
     force : bool
         Replace whatever library is already there.
+    export_smiles : str or Path, optional
+        Also write the library's SMILES to this CSV, for a teacher model to score.
     display : xai4chem.progress.Display
         Where progress goes; silent by default, ``ConsoleDisplay`` for the CLI's output.
 
@@ -47,10 +49,15 @@ def setup(source=None, featurizers=("datamol",), library_dir=None, force=False, 
     ReferenceLibrary
         The library, ready to read.
     """
+    from xai4chem.data.build import export_smiles as export
     from xai4chem.data.build import setup_library
     from xai4chem.data.library import ReferenceLibrary
 
-    return ReferenceLibrary(setup_library(source, featurizers, library_dir, force=force, display=display))
+    library = ReferenceLibrary(setup_library(source, featurizers, library_dir, force=force, display=display))
+    if export_smiles is not None:
+        display.note(f"writing the library's SMILES to {export_smiles}")
+        export(library.dir, export_smiles)
+    return library
 
 
 # --- fit --------------------------------------------------------------------------------------------

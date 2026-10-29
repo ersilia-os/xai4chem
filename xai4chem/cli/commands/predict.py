@@ -9,15 +9,16 @@ from xai4chem.cli import options
 @click.option(
     "--output", "-o", default="predictions.csv", show_default=True, type=click.Path(dir_okay=False), help="Output CSV."
 )
+@click.option("--details", is_flag=True, help="Also give S and, with a hard head, H_S, T and `a` per column.")
 @options.friendly_errors
-def predict_cmd(model_dir, input_file, smiles_list, output):
+def predict_cmd(model_dir, input_file, smiles_list, output, details):
     """Score molecules fast, without explanations (millions of molecules are fine)."""
     from xai4chem import api
     from xai4chem.models.model import XAIModel
 
     smiles, _ = options.load_molecules(input_file, smiles_list)
     display, started = options.begin("predict", f"{options.plural(len(smiles), 'molecule')} · {model_dir}")
-    out = api.predict(XAIModel(model_dir), smiles, output, display=display)
+    out = api.predict(XAIModel(model_dir), smiles, output, details=details, display=display)
     bad = int((~out["valid"]).sum())
     rows = [
         ("Molecules", f"{len(smiles):,}" + (f" · {bad:,} unparseable" if bad else "")),

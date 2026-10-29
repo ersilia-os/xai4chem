@@ -12,6 +12,8 @@
   fidelity adds the top-decile RMSE.
 - `fit --task auto|binary|regression` for hard labels; forcing `binary` on non-binary values is refused before
   training. The non-binary task is now called `regression`, not `continuous`.
+- The CLI and the Python API expose the same options (tested): `fit` gains `--scale`, `--reweight`, `--n-estimators`,
+  `--panel-rows`, `--seed` and `--no-report`, `predict` gains `--details`, and `api.setup` gains `export_smiles`.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 ## 1.1.0

@@ -185,6 +185,19 @@ def test_fit_command(library, tmp_path):
     run(args + ["--force"])
 
 
+def test_fit_and_predict_options_reach_the_model(library, tmp_path):
+    root, lib = library
+    m = tmp_path / "m"
+    flags = ["--n-estimators", "80", "--panel-rows", "50", "--seed", "7", "--reweight", "off", "--scale", "identity"]
+    run(["fit", "-s", root / "soft.csv", "--library-dir", lib, "-m", m, "--no-report", *flags])
+    assert not (m / "report.html").exists()
+    meta = json.loads((m / "columns" / "c0" / "soft_meta.json").read_text())
+    assert meta["seed"] == 7 and meta["transform"] == "identity" and meta["reweight"]["strategy"] == "none"
+    assert meta["n_trees"] <= 80
+    run(["predict", "-m", m, "-S", "CCO", "--details", "-o", tmp_path / "p.csv"])
+    assert "activity_S" in pd.read_csv(tmp_path / "p.csv").columns
+
+
 def test_regression_hard_labels(library, tmp_path):
     """Non-binary measurements give a regression H, calibrated and blended like a classifier."""
     from .conftest import teacher

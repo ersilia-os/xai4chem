@@ -41,17 +41,13 @@ def setup_cmd(source, featurizers, library_dir, export_smiles, force):
 
     names = options.FEATURIZERS if "all" in featurizers else list(dict.fromkeys(["morgan", *featurizers]))
     display, started = options.begin("setup", f"{source or 'ersilia'} · {', '.join(names)}")
-    library = api.setup(source, names, library_dir, force=force, display=display)
+    library = api.setup(source, names, library_dir, force=force, export_smiles=export_smiles, display=display)
     rows = [
         ("Library", f"{library.name} · {len(library):,} molecules"),
         ("Featurizers", ", ".join(library.featurizers)),
         ("Location", options.shown(library.dir)),
     ]
     if export_smiles:
-        from xai4chem.data.build import export_smiles as export
-
-        display.note(f"writing the library's SMILES to {export_smiles}")
-        export(library.dir, export_smiles)
         rows.append(("SMILES", options.shown(export_smiles)))
         rows.append(("Next", f"score {export_smiles} with your teacher, then xai4chem fit -s soft.csv -m model"))
     else:
