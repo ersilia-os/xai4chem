@@ -40,7 +40,7 @@ from xai4chem.featurizers import FEATURIZERS, get_featurizer
 from xai4chem.featurizers.morgan import NBITS, fragment_smiles, morgan_bit_info
 from xai4chem.progress import SILENT
 
-ERSILIA_LIBRARY_URL = "https://eosvc-public.s3.eu-central-1.amazonaws.com/xai4chem/erl0"
+ERSILIA_LIBRARY_URL = "https://eosvc-public.s3.eu-central-1.amazonaws.com/xai4chem/data/erl0"
 PANEL_SIZE = 50_000
 BIT_DICTIONARY_MOLS = 20_000
 DATAMOL_FIT_MOLS = 20_000

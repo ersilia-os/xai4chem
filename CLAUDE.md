@@ -101,7 +101,7 @@ subprocess. The package `__init__` is lazy too (`__getattr__`).
 ## Data
 
 - `~/.xai4chem/library/` is model-independent. For Ersilia's library, `setup` downloads it ready-made
-  from `s3://eosvc-public/xai4chem/erl0/` (checksums in the published `library.json`); nothing reads
+  from `s3://eosvc-public/xai4chem/data/erl0/` (checksums in the published `library.json`); nothing reads
   Olinda's files. `scripts/build_reference_library.py` builds that published copy (maintainers only).
 - Count matrices are stored as CSR (`data`, `indices`, `indptr`), descriptors dense. `ReferenceLibrary`
   hides the difference; a library with another `schema` is refused with `setup --force` as the way out.

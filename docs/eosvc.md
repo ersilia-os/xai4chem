@@ -4,7 +4,7 @@ Everything in a library directory is model-independent. Ersilia's library (`erl0
 is published ready-made in the eosvc public bucket, and `xai4chem setup` downloads it:
 
 ```
-s3://eosvc-public/xai4chem/erl0/
+s3://eosvc-public/xai4chem/data/erl0/
   library.json          manifest, with the size and SHA-256 of every file
   smiles.h5             the SMILES, in row order                           0.1 GB
   morgan.h5             Morgan counts (identical to Olinda's), CSR          0.3 GB
@@ -21,8 +21,8 @@ its checksum, and builds the binary-fingerprint cache (`morgan_bits_*.npy`) loca
 ## Publishing a new version (maintainers)
 
 ```bash
-python scripts/build_reference_library.py --smiles erl0_smiles.csv --out build/erl0
-aws s3 sync build/erl0 s3://eosvc-public/xai4chem/erl0/ --exclude "morgan_bits_*" --exclude "*.tmp"
+python scripts/build_reference_library.py --smiles erl0_smiles.csv --out data/erl0
+aws s3 sync data/erl0 s3://eosvc-public/xai4chem/data/erl0/ --exclude "morgan_bits_*" --exclude "*.tmp"
 ```
 
 The script featurizes the SMILES (about 2 hours, sequentially) or reuses matrices computed earlier, after

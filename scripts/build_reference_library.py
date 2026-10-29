@@ -1,6 +1,6 @@
 """Build the published Ersilia reference library that ``xai4chem setup`` downloads (maintainers only).
 
-    python scripts/build_reference_library.py --smiles erl0.h5:input --out build/erl0 \
+    python scripts/build_reference_library.py --smiles erl0.h5:input --out data/erl0 \
         --reuse morgan=erl0.h5:data --reuse accfg=old/accfg.h5:X --reuse datamol=old/datamol.h5:X \
         --configs old/library.json --panel old/panel.npy --bit-dictionary old/bit_dictionary.json
 
@@ -12,7 +12,7 @@ configurations of reused matrices (datamol's fitted medians), as a library manif
 
 The output directory is uploaded as is (the fingerprint cache is left out; ``setup`` builds it locally):
 
-    aws s3 sync build/erl0 s3://eosvc-public/xai4chem/erl0/ --exclude "morgan_bits_*" --exclude "*.tmp"
+    aws s3 sync data/erl0 s3://eosvc-public/xai4chem/data/erl0/ --exclude "morgan_bits_*" --exclude "*.tmp"
 """
 
 import argparse
