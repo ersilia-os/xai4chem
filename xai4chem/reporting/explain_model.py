@@ -233,8 +233,12 @@ def draw_top_features(bit_info, valid_top_bits, smiles, output_path, fingerprint
                 legends.append(str(x))
         options = Draw.rdMolDraw2D.MolDrawOptions()
         options.prepareMolsBeforeDrawing = False    
-        p = Draw.DrawMorganBits(list_bits, molsPerRow=6, legends=legends, drawOptions=options)
-        p.save(output_path)
+        p = Draw.DrawMorganBits(list_bits, molsPerRow=6, legends=legends, drawOptions=options, useSVG=False)
+        if isinstance(p, bytes):  # recent RDKit returns PNG bytes, older ones a PIL image
+            with open(output_path, 'wb') as f:
+                f.write(p)
+        else:
+            p.save(output_path)
         
     elif fingerprints == "accfg":
         fps = AccFgFingerprint()
@@ -250,6 +254,7 @@ def draw_top_features(bit_info, valid_top_bits, smiles, output_path, fingerprint
                       molsPerRow=5,
                       subImgSize=(200, 200),
                       legends=labels, 
+                      useSVG=False,
                       returnPNG=False)
         img.save(output_path)
 

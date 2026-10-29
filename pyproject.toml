@@ -5,15 +5,15 @@ description = "XAI4Chem is an explainable AI package for chemistry"
 authors = ["Ersilia Open Source Initiative <hello@ersilia.io>", "Jason Hlozek <jason.hlozek@uct.ac.za>", "Hellen Namulinda <hellennamulinda@gmail.com>", "Gemma Turon <gemma@ersilia.io>", "Miquel Duran-Frigola <miquel@ersilia.io>"]
 
 [tool.poetry.dependencies]
-scikit-learn  = "<=1.6.1"
-datamol       = "0.12.5"
-rdkit         = "2024.3.6"
-shap          = "0.47.0"
-xgboost       = "<=2.0"
-optuna        = "4.4.0"
-pandas        = "<=2.3.0"
-matplotlib    = "3.10.8"
-seaborn       = "0.13.2"
+scikit-learn  = "*"
+datamol       = "*"
+rdkit         = "*"
+shap          = "*"
+xgboost       = "*"
+optuna        = "*"
+pandas        = "*"
+matplotlib    = "*"
+seaborn       = "*"
 
 
 [tool.poetry.scripts]
