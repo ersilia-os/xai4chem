@@ -48,7 +48,7 @@ pip install git+https://github.com/ersilia-os/xai4chem.git
 ```bash
 xai4chem setup --export-smiles erl0_smiles.csv      # once; then score this file with your teacher → soft.csv
 xai4chem fit -s soft.csv -m models/my_model         # S on descriptors → global explanations → report.html
-xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head
+xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head (--task auto|binary|regression)
 xai4chem explain -m models/my_model -i molecules.csv                  # → explanations/
 xai4chem explain -m models/my_model -S "<smiles A>" -S "<smiles B>"   # two molecules: a matched pair
 xai4chem predict -m models/my_model -i molecules.csv -o predictions.csv

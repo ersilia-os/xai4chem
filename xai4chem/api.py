@@ -64,7 +64,9 @@ def fit(
     library_dir=None,
     force=False,
     seed=42,
+    task="auto",
     transform="auto",
+    reweight="auto",
     n_estimators=None,
     panel_rows=None,
     report=True,
@@ -88,8 +90,14 @@ def fit(
         Overwrite an existing model in ``model_dir``.
     seed : int
         Seed for the validation splits and the golden molecules.
+    task : str
+        Task of the hard labels: ``auto`` (binary if every label is 0 or 1, else regression), ``binary`` or
+        ``regression``. Forcing ``binary`` on other values is refused.
     transform : str
-        Scale S learns on: ``auto`` (logit for probabilities), ``logit`` or ``identity``.
+        Scale S learns on: ``auto`` (the teacher's raw values, same as ``identity``) or ``logit`` (explicit, for probabilities).
+    reweight : str
+        Target reweighting for S: ``auto`` (only for an imbalanced target, as in Olinda), ``on``, ``off``,
+        ``kde`` or ``bins``.
     n_estimators : int, optional
         Most boosting rounds for S (default 2,000, with early stopping).
     panel_rows : int, optional
@@ -133,6 +141,11 @@ def fit(
                 f"No column of {hard_labels} ({', '.join(map(str, hard[1].columns))}) matches a soft-label column "
                 f"({', '.join(map(str, Y.columns))}). Names must match exactly (case included), or as a prefix."
             )
+        from xai4chem.models.hard import resolve_task
+
+        for hard_name in mapping:  # refuse a bad --task now, not after minutes of boosting
+            y = hard[1][hard_name].to_numpy(dtype=np.float64)
+            resolve_task(y[np.isfinite(y)], task, f"hard column '{hard_name}'")
     total = 5 if hard_labels is not None else 4
     if not report:
         total -= 1
@@ -145,12 +158,12 @@ def fit(
 
     display.step(2, total, "Learning S, the surrogate of the teacher")
     model_dir.mkdir(parents=True, exist_ok=True)
-    Z, columns = _learn_soft(X, Y, feat, model_dir, transform, seed, n_estimators or N_ESTIMATORS, display)
+    Z, columns = _learn_soft(X, Y, feat, model_dir, transform, reweight, seed, n_estimators or N_ESTIMATORS, display)
     _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns, seed)
 
     if hard_labels is not None:
         display.step(3, total, "Learning H from the hard labels")
-        _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, display)
+        _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, task, display)
 
     step = 4 if hard_labels is not None else 3
     display.step(step, total, "Explaining the library panel")
@@ -166,7 +179,7 @@ def fit(
     return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
 
 
-def _learn_soft(X, Y, feat, model_dir, transform, seed, n_estimators, display):
+def _learn_soft(X, Y, feat, model_dir, transform, reweight, seed, n_estimators, display):
     """S per teacher column, in a live table. Returns the model-scale targets and the manifest's column entries."""
     from xai4chem.models.surrogate import MIN_SOFT_ROWS, fit_column
     from xai4chem.run import FIDELITY_NAME, S_NAME, SOFT_META_NAME, column_dir, column_id, write_json
@@ -190,6 +203,7 @@ def _learn_soft(X, Y, feat, model_dir, transform, seed, n_estimators, display):
                 seed,
                 n_estimators,
                 on_round=on_round,
+                reweight=reweight,
             )
             if fitted is None:
                 n = int(Y.iloc[:, j].notna().sum())
@@ -201,6 +215,8 @@ def _learn_soft(X, Y, feat, model_dir, transform, seed, n_estimators, display):
             meta = {"name": name, **fitted["meta"]}
             if meta["constant"]:
                 display.note(f"{name}: the teacher's output is constant; S will be too, and explain nothing", "warning")
+            if meta["reweight"]["strategy"] != "none":
+                display.note(f"{name}: {meta['reweight']['strategy']} reweighting ({meta['reweight']['reason']})")
             Z[fitted["mask"], j] = fitted["z"]
             cdir = column_dir(model_dir, column_id(j))
             cdir.mkdir(parents=True, exist_ok=True)
@@ -291,7 +307,7 @@ def _save_hard_head(hdir, booster, iso_map, labelled, fps, meta):
     write_json(hdir / HARD_META_NAME, meta)
 
 
-def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, display):
+def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, task_mode, display):
     """H, its isotonic map onto S and the gate's labelled set, per matched column, in a live table."""
     import pandas as pd
 
@@ -311,7 +327,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
             y = Y[hard_name].to_numpy(dtype=np.float64)
             idx = np.where(np.isfinite(y) & valid)[0]
             y = y[idx]
-            task = hd.detect_task(y)
+            task = hd.resolve_task(y, task_mode, f"hard column '{hard_name}'")
             table.update(
                 hard_name,
                 Task=task,

@@ -185,20 +185,29 @@ def test_fit_command(library, tmp_path):
     run(args + ["--force"])
 
 
-def test_continuous_hard_labels(library, tmp_path):
+def test_regression_hard_labels(library, tmp_path):
     """Non-binary measurements give a regression H, calibrated and blended like a classifier."""
     from .conftest import teacher
 
     root, lib = library
     take = pd.read_csv(root / "soft.csv").sample(120, random_state=3)
     hard = pd.DataFrame({"smiles": take.smiles, "noisy": teacher(take.smiles.tolist()) * 10 + 1})
-    hard.to_csv(tmp_path / "hard_continuous.csv", index=False)
-    api.fit(root / "soft.csv", tmp_path / "m", tmp_path / "hard_continuous.csv", library_dir=lib, n_estimators=200)
+    hard.to_csv(tmp_path / "hard_regression.csv", index=False)
+    api.fit(root / "soft.csv", tmp_path / "m", tmp_path / "hard_regression.csv", library_dir=lib, n_estimators=200)
     model = XAIModel(tmp_path / "m")
     col = model.column("noisy")
-    assert col.hard is not None and col.hard.task == "continuous"
+    assert col.hard is not None and col.hard.task == "regression"
     r = model.explain(QUERIES, columns=["noisy"])["noisy"]
     np.testing.assert_allclose(r["phi_P"].sum(1) + r["base_P"], r["P"], atol=1e-4)
+
+
+def test_forced_binary_task_is_refused_before_training(library, tmp_path):
+    root, lib = library
+    take = pd.read_csv(root / "soft.csv").sample(120, random_state=3)
+    pd.DataFrame({"smiles": take.smiles, "noisy": take.noisy}).to_csv(tmp_path / "hard_scores.csv", index=False)
+    args = ["fit", "-s", root / "soft.csv", "-h", tmp_path / "hard_scores.csv", "--library-dir", lib]
+    fails(args + ["-m", tmp_path / "m", "--task", "binary"], "forced to --task binary")
+    assert not (tmp_path / "m" / "manifest.json").exists()
 
 
 def test_soft_labels_outside_the_library(library, tmp_path):

@@ -25,7 +25,7 @@ METHODS = """
 <details style="margin-top:8px"><summary>How to read this report</summary>
 <div class="card" style="margin-top:10px; font-size:12.5px; line-height:1.55">
 <p><b>S</b> is a gradient-boosting surrogate trained to reproduce the teacher's outputs (soft labels) over the
-reference library; probability outputs are learned in logit space. Its <b>fidelity</b> is measured on library
+reference library, on the teacher's raw scale. Its <b>fidelity</b> is measured on library
 molecules held out from training. Explanations describe S, so they are as trustworthy as that fidelity.</p>
 <p>Attributions are exact TreeSHAP values on S's scale. <b>Importance</b> is the mean |SHAP| over the explanation
 panel, a fixed random subset of the library. <b>Direction</b> is the correlation between a feature's value and its
@@ -119,6 +119,8 @@ def _training_details(meta):
             "Fidelity on the teacher's scale",
             f"R² {_f(meta['fidelity_teacher_scale']['r2'])} · RMSE {_f(meta['fidelity_teacher_scale']['rmse'])}",
         ],
+        ["Top-decile RMSE", _f(meta["fidelity_teacher_scale"]["top_decile_rmse"])],
+        ["Reweighting", H.esc(f"{meta['reweight']['strategy']} ({meta['reweight']['reason']})")],
     ]
     rows += [[H.esc(k), H.esc(v)] for k, v in meta["params"].items()]
     return (
@@ -187,6 +189,7 @@ def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
     stats = [
         H.stat("Fidelity R²", _f(fid["r2"]), f"{fid['n']:,} held-out library molecules{scale}"),
         H.stat("Spearman ρ", _f(fid["spearman"]), "rank agreement with the teacher"),
+        H.stat("Top-decile RMSE", _f(fid["top_decile_rmse"]), "error on the teacher's highest 10%"),
     ]
     if hard:
         ho = hard["heldout"]

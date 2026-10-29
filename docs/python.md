@@ -34,7 +34,7 @@ model.predict(smiles, details=True)      # DataFrame: P (teacher scale) per colu
 
 ## Explanations
 
-`explain` returns, per column, arrays over molecules, on the model's scale (logit for probability teachers):
+`explain` returns, per column, arrays over molecules, on the model's scale (the teacher's own scale):
 
 ```python
 res = model.explain(smiles)["qed"]

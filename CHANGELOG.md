@@ -6,6 +6,12 @@
 - Dependencies re-pinned exactly to current releases that ship wheels for these Pythons (pandas 3,
   numpy 2.5, scikit-learn 1.9, xgboost 3.4, RDKit 2026.9, datamol 0.13). Models fitted with the earlier
   pins carry golden vectors that are re-checked on load, so refit them if the check fails.
+- Soft labels can be anything: S is fitted to the teacher's raw values on a squared-error objective and
+  explained on that scale, as in Olinda. The automatic logit scale for probabilities is gone (`transform="logit"` remains an explicit option in Python).
+- Imbalanced soft-label targets are reweighted by inverse density (Olinda's rule, automatic per column);
+  fidelity adds the top-decile RMSE.
+- `fit --task auto|binary|regression` for hard labels; forcing `binary` on non-binary values is refused before
+  training. The non-binary task is now called `regression`, not `continuous`.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 ## 1.1.0

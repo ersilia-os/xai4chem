@@ -13,7 +13,7 @@ This guide covers what is non-obvious about working here. The Ersilia house rule
 
 | | |
 |---|---|
-| **S** | the surrogate, learned from the teacher's soft labels (logit space for probabilities) |
+| **S** | the surrogate, learned from the teacher's soft labels (on the teacher's raw values, as in Olinda) |
 | **H** | the hard-label model, in margin space |
 | **H_S** | H on S's scale, through an isotonic map |
 | **T** | exact 1-NN Tanimoto (binary Morgan) to the labelled set |
@@ -94,7 +94,7 @@ subprocess. The package `__init__` is lazy too (`__getattr__`).
   dictionary name is only for global summaries and absent bits.
 - **Atom maps.** Scores sum exactly to the attribution of the features present. Absent features are
   reported separately, never smeared onto atoms.
-- **Scales.** Attributions are on the model scale (logit for probabilities). Prediction tables (`_S`,
+- **Scales.** Attributions are on the model scale (the teacher's raw scale unless a logit scale is requested in Python). Prediction tables (`_S`,
   `_HS`) are on the teacher's scale, identical between `explain` and `predict`.
 - **Invalid SMILES.** They keep their row and get NaN everywhere, including applicability columns.
 

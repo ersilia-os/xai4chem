@@ -1,7 +1,8 @@
 """S: the surrogate, a gradient-boosted regressor of the teacher's soft labels.
 
-Teacher outputs that look like probabilities are learned in logit space, where SHAP values are additive;
-predictions go back to the teacher's scale only at the end. Training uses Olinda's tuned defaults:
+Soft labels can be anything a teacher returns (scores, probabilities, concentrations), so, as in Olinda,
+S is fitted to the raw values with a squared-error objective and explained on that same scale. A ``logit``
+scale remains available explicitly, for teachers known to output probabilities. Training uses Olinda's tuned defaults:
 histogram trees with 64 bins (lossless for counts clipped at 15), depth 8, row and column subsampling, a
 ``min_child_weight`` that grows with the data, and early stopping, after which the booster is trimmed to
 its best iteration.
@@ -15,6 +16,8 @@ import os
 
 import numpy as np
 from scipy.stats import spearmanr
+
+from xai4chem.models.weights import apply_weights, resolve_weights
 
 EPS = 1e-4
 MIN_SOFT_ROWS = 100
@@ -47,12 +50,8 @@ def min_child_weight(n_rows):
 
 
 def choose_transform(y, mode="auto"):
-    if mode != "auto":
-        return mode
-    y = y[np.isfinite(y)]
-    in_unit = y.min() >= 0 and y.max() <= 1
-    binary = np.isin(y, [0, 1]).all()
-    return "logit" if in_unit and not binary else "identity"
+    """The scale S learns on: ``auto`` is the raw values, whatever the teacher returns, as in Olinda."""
+    return "identity" if mode == "auto" else mode
 
 
 def forward(y, transform):
@@ -95,10 +94,12 @@ def contributions(booster, X, sparse):
     return booster.predict(dmatrix(X, sparse), pred_contribs=True)
 
 
-def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL_FRAC, on_round=None):
-    """Fit with early stopping on a random validation split; return the trimmed booster and the validation rows.
+def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL_FRAC, on_round=None, reweight="auto"):
+    """Fit with early stopping on a random validation split.
 
-    ``on_round(round, total, rmse, best)`` is called after every boosting round.
+    Returns the trimmed booster, the validation rows, the parameters and the reweighting that was used.
+    The weights (see :mod:`xai4chem.models.weights`) come from the training rows and apply to training and
+    early stopping together. ``on_round(round, total, rmse, best)`` is called after every boosting round.
     """
     import xgboost as xgb
 
@@ -106,10 +107,14 @@ def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL
     n_val = max(1, int(round(len(y) * val_frac)))
     trn, val = np.sort(idx[n_val:]), np.sort(idx[:n_val])
     Xm = to_model_input(X, sparse)
-    dtrain = xgb.QuantileDMatrix(Xm[trn], label=y[trn], max_bin=PARAMS["max_bin"])
+    edges, weights, reweight_info = resolve_weights(y[trn], reweight)
+    w_trn = w_val = None
+    if weights is not None:
+        w_trn, w_val = apply_weights(y[trn], edges, weights), apply_weights(y[val], edges, weights)
+    dtrain = xgb.QuantileDMatrix(Xm[trn], label=y[trn], weight=w_trn, max_bin=PARAMS["max_bin"])
     # A plain DMatrix on purpose: XGBoost 2.0 does not cache predictions for a QuantileDMatrix eval set,
     # so each round would re-predict the validation split with every tree (20x slower, measured)
-    dval = xgb.DMatrix(Xm[val], label=y[val])
+    dval = xgb.DMatrix(Xm[val], label=y[val], weight=w_val)
     params = {**PARAMS, "min_child_weight": min_child_weight(len(trn)), "nthread": n_threads(len(trn)), "seed": seed}
     callbacks = [_RoundCallback(on_round, n_estimators)] if on_round is not None else []
     booster = xgb.train(
@@ -121,7 +126,7 @@ def train_booster(X, y, sparse, seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL
         verbose_eval=False,
         callbacks=callbacks,
     )
-    return booster[: int(booster.best_iteration) + 1], val, params
+    return booster[: int(booster.best_iteration) + 1], val, params, reweight_info
 
 
 def _RoundCallback(on_round, total):
@@ -152,20 +157,36 @@ def safe_spearman(a, b):
 
 
 def fidelity(y_true, y_pred):
-    """R², Spearman ρ and RMSE of predictions against the teacher."""
+    """R², Spearman ρ and RMSE of predictions against the teacher, and the RMSE on its top decile.
+
+    The top-decile RMSE (rows where the teacher is at or above its 90th percentile, as in Olinda) shows how
+    well the sparse high-value tail is reproduced, which the global R² can hide.
+    """
     y_true = np.asarray(y_true, dtype=np.float64)
     y_pred = np.asarray(y_pred, dtype=np.float64)
     ss_res = float(((y_true - y_pred) ** 2).sum())
     ss_tot = float(((y_true - y_true.mean()) ** 2).sum())
+    tail = y_true >= np.quantile(y_true, 0.9) if len(y_true) else np.zeros(0, dtype=bool)
     return {
         "r2": 1 - ss_res / ss_tot if ss_tot > 0 else float("nan"),
         "spearman": safe_spearman(y_true, y_pred),
         "rmse": float(np.sqrt(ss_res / max(len(y_true), 1))),
+        "top_decile_rmse": float(np.sqrt(((y_true[tail] - y_pred[tail]) ** 2).mean())) if tail.any() else float("nan"),
         "n": int(len(y_true)),
     }
 
 
-def fit_column(X, y, sparse, transform="auto", seed=42, n_estimators=N_ESTIMATORS, val_frac=VAL_FRAC, on_round=None):
+def fit_column(
+    X,
+    y,
+    sparse,
+    transform="auto",
+    seed=42,
+    n_estimators=N_ESTIMATORS,
+    val_frac=VAL_FRAC,
+    on_round=None,
+    reweight="auto",
+):
     """Learn S for one teacher column.
 
     Returns ``None`` when the column has fewer than :data:`MIN_SOFT_ROWS` finite values, else a dict with
@@ -178,8 +199,8 @@ def fit_column(X, y, sparse, transform="auto", seed=42, n_estimators=N_ESTIMATOR
     t = choose_transform(y, transform)
     z = forward(y[mask], t)
     Xm = X[np.where(mask)[0]] if not mask.all() else X
-    booster, val, params = train_booster(
-        Xm, z, sparse, seed=seed, n_estimators=n_estimators, val_frac=val_frac, on_round=on_round
+    booster, val, params, reweight_info = train_booster(
+        Xm, z, sparse, seed=seed, n_estimators=n_estimators, val_frac=val_frac, on_round=on_round, reweight=reweight
     )
     pred = predict_margin(booster, Xm[val], sparse)
     meta = {
@@ -192,5 +213,6 @@ def fit_column(X, y, sparse, transform="auto", seed=42, n_estimators=N_ESTIMATOR
         "constant": bool(np.ptp(z) == 0),
         "seed": seed,
         "params": params,
+        "reweight": reweight_info,
     }
     return {"booster": booster, "transform": t, "mask": mask, "z": z, "meta": meta, "heldout": (z[val], pred)}

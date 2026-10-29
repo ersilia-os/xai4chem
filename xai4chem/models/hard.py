@@ -1,7 +1,7 @@
 """H, H_S and the gate: refining the surrogate with hard (experimental) labels, Olinda's logic.
 
 1. **H** is trained on measurements with the same featurizer as S: a binary classifier for 0/1 labels,
-   a regressor otherwise. Its output is taken in margin space, where SHAP values are additive. One
+   a regressor otherwise (or whatever ``task`` forces). Its output is taken in margin space, where SHAP values are additive. One
    stratified held-out split (20%) gives an honest metric and the number of trees; H is then refitted on
    every label.
 2. **H_S** is H carried onto S's scale by an isotonic map, fitted on soft-labelled molecules where both H's
@@ -48,8 +48,31 @@ def apply_isotonic(h, iso):
     return np.interp(h, iso["x"], iso["y"])
 
 
+TASKS = ("auto", "binary", "regression")
+
+
 def detect_task(y):
-    return "binary" if np.isin(y, [0, 1]).all() else "continuous"
+    """Binary if every label is 0 or 1, else regression (Olinda's rule)."""
+    return "binary" if np.isin(y, [0, 1]).all() else "regression"
+
+
+def resolve_task(y, task="auto", name="the hard labels"):
+    """The task for a hard column: detected, or forced with ``binary`` or ``regression``.
+
+    Forcing ``binary`` on values other than 0 and 1 is refused rather than cast, since casting would floor
+    every value below 1 to a negative.
+    """
+    if task not in TASKS:
+        raise ValueError(f"Unknown task {task!r}. Choose one of {', '.join(TASKS)}.")
+    if task == "auto":
+        return detect_task(y)
+    if task == "binary" and not np.isin(y, [0, 1]).all():
+        off = sorted(set(np.unique(y).tolist()) - {0.0, 1.0})[:3]
+        raise ValueError(
+            f"{name} was forced to --task binary but holds non-binary values (e.g. {off}). Casting them would "
+            "floor everything below 1.0 to a negative. Threshold the column yourself, or drop --task."
+        )
+    return task
 
 
 def enough_labels(y, task):

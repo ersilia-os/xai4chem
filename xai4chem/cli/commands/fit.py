@@ -27,10 +27,17 @@ from xai4chem.cli import options
     type=click.Choice(options.FEATURIZERS),
     help="Features the surrogate learns from (must be prepared by `xai4chem setup`).",
 )
+@click.option(
+    "--task",
+    default="auto",
+    show_default=True,
+    type=click.Choice(["auto", "binary", "regression"]),
+    help="Task of the hard labels: binary if every label is 0 or 1, else regression. Forcing binary on other values is refused.",
+)
 @options.library_dir()
 @click.option("--force", is_flag=True, help="Overwrite an existing model.")
 @options.friendly_errors
-def fit_cmd(soft_labels, hard_labels, model_dir, featurizer, library_dir, force):
+def fit_cmd(soft_labels, hard_labels, model_dir, featurizer, task, library_dir, force):
     """Learn an explainable surrogate of a teacher model, and refine it with measurements if given.
 
     Writes the model directory, with global explanations and `report.html`.
@@ -39,7 +46,7 @@ def fit_cmd(soft_labels, hard_labels, model_dir, featurizer, library_dir, force)
     from xai4chem.models.hard import metric_text
 
     display, started = options.begin("fit", f"{soft_labels}" + (f" + {hard_labels}" if hard_labels else ""))
-    out = api.fit(soft_labels, model_dir, hard_labels, featurizer, library_dir, force=force, display=display)
+    out = api.fit(soft_labels, model_dir, hard_labels, featurizer, library_dir, force=force, task=task, display=display)
     rows = []
     for s in out["columns"]:
         line = f"R² {s['fidelity']['r2']:.3f} · ρ {s['fidelity']['spearman']:.3f}"

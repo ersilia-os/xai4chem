@@ -176,7 +176,7 @@ def write_gallery(path, featurizer, cols, pred, cards, comparisons=()):
     """Write the gallery page: comparisons (if any), the overview table, then the cards."""
     lede = (
         f"{len(pred):,} molecule{'' if len(pred) == 1 else 's'} explained with a {H.esc(featurizer.description)} "
-        "surrogate. Atom colours and bars are SHAP contributions on the model's scale (logit for probability teachers)."
+        "surrogate. Atom colours and bars are SHAP contributions on the teacher's scale."
     )
     if featurizer.name == "morgan":
         lede += (

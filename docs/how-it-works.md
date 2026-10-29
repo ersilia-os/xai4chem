@@ -25,8 +25,8 @@ rather than hiding:
 
 | | |
 |---|---|
-| **S** | XGBoost regressor on the teacher's outputs. Probabilities are learned in logit space, where SHAP values are additive. Early stopping on 10% held-out library molecules; the booster is trimmed to its best iteration |
-| **H** | XGBoost model on your measurements, with the same features as S: binary classifier for 0/1 labels, regressor otherwise. Margin space. Quality from one stratified 20% held-out split, after which H is refitted on every label |
+| **S** | XGBoost regressor on the teacher's outputs. Soft labels can be any numbers, so S is fitted to the raw values and explained on that scale (as in Olinda). A skewed target is reweighted by inverse density (none if balanced, bins if discrete or small, a kernel density otherwise; weights 1 to 10, as in Olinda), in training and early stopping but never in the reported fidelity. Early stopping on 10% held-out library molecules; the booster is trimmed to its best iteration |
+| **H** | XGBoost model on your measurements, with the same features as S: binary classifier for 0/1 labels, regressor otherwise (`--task auto|binary|regression`; forcing `binary` on other values is refused). Margin space. Quality from one stratified 20% held-out split, after which H is refitted on every label |
 | **H_S** | H carried onto S's scale by isotonic regression, fitted on library molecules where both H's score and the teacher's output exist. The direction is learned |
 | **T** | Exact Tanimoto similarity (binary Morgan, radius 3, 2048 bits) to the nearest labelled molecule |
 | **a** | `a_max · ramp(T)`: 0 below T = 0.4, rising to `a_max` at T = 0.7 (Olinda's constants) |
