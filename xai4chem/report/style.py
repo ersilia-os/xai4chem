@@ -31,16 +31,32 @@ ROLES = {
 def import_stylia():
     """Import stylia in the report's style and format, with a headless matplotlib.
 
-    stylia 1.0.1 runs ``shutil.rmtree(matplotlib.get_cachedir())`` at import. Whichever process imports it
-    first deletes that directory, and the next import then fails on a path nobody asked about. Creating the
-    directory first turns that into the no-op it was meant to be.
+    stylia 1.0.1 runs ``shutil.rmtree(matplotlib.get_cachedir())`` at import. That deletes matplotlib's font
+    cache, so every report paid ~10 s to scan the system fonts again (and the next import failed on a path
+    nobody asked about). The cache directory is created first, and the delete is skipped for that one path
+    while stylia imports.
     """
     import os
+    import shutil
+    import sys
 
     import matplotlib
 
     matplotlib.use("Agg")
-    os.makedirs(matplotlib.get_cachedir(), exist_ok=True)
+    cache = matplotlib.get_cachedir()
+    os.makedirs(cache, exist_ok=True)
+    if "stylia" not in sys.modules:
+        real = shutil.rmtree
+
+        def keep_cache(path, *args, **kwargs):
+            if os.path.abspath(path) != os.path.abspath(cache):
+                real(path, *args, **kwargs)
+
+        shutil.rmtree = keep_cache
+        try:
+            import stylia
+        finally:
+            shutil.rmtree = real
     import stylia
 
     stylia.set_style("article")

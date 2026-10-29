@@ -65,3 +65,17 @@ def test_a_rewritten_report_drops_stale_figures(reported):
 def test_every_figure_has_a_title_and_caption():
     assert all(title and text for title, text in F.FIGURES.values())
     assert F.caption("nope") == ("nope", "")
+
+
+def test_importing_stylia_keeps_matplotlibs_font_cache(tmp_path):
+    """stylia deletes matplotlib's cache directory at import; a report must not pay for rebuilding the fonts."""
+    import os
+    import subprocess
+    import sys
+
+    marker = tmp_path / "fontlist-keep.json"
+    marker.write_text("{}")
+    code = "from xai4chem.report.style import import_stylia; import_stylia()"
+    env = {**os.environ, "MPLCONFIGDIR": str(tmp_path)}
+    subprocess.run([sys.executable, "-c", code], env=env, check=True, capture_output=True)
+    assert marker.exists()

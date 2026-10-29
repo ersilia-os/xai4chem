@@ -38,6 +38,8 @@ optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/mi
   model; `predict` on no molecules and `explain` with the wrong number of ids give clear errors.
 - Re-checked against Olinda 1.4.0 (continuous hard labels, label scaling): the hard head records its `label_scale`
   and ceiling in `hard_meta.json`, as Olinda does.
+- Faster reports: importing stylia no longer deletes matplotlib's font cache, which made every report spend ~10 s
+  re-scanning the system fonts (a report now takes ~2 s). It also no longer wipes that cache for other programs.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 **Models**
