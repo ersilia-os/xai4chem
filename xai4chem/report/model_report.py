@@ -109,6 +109,7 @@ def _substructures(table, bit_dictionary):
     """Rows whose bit is named by an environment of radius ≥ 1 (single-atom bits mostly track size)."""
 
     def radius(feature):
+        """The radius of a Morgan feature's first fragment, 0 if the bit has none."""
         frags = bit_dictionary.get(str(feature).split("-")[1], {}).get("fragments", [])
         return frags[0]["radius"] if frags else 0
 
@@ -302,6 +303,7 @@ def _soft_section(model_dir, figures_dir, prefix, col, featurizer, bit_dictionar
     cid = col["id"]
 
     def draw(key, fn):
+        """Render one figure of this column under its own file name."""
         return F.render(fn, figures_dir, f"{cid}_{key}", key)
 
     fidelity_figs = []
@@ -359,6 +361,7 @@ def _hard_section(model_dir, figures_dir, prefix, col, hard, exp, featurizer, bi
     labels, phi, values = _effects_data(exp / "plot_hs.npz")
 
     def draw(key, fn):
+        """Render one figure of this column under its own file name."""
         return F.render(fn, figures_dir, f"{cid}_{key}", key)
 
     held = np.load(hdir / H_HELDOUT_NAME) if (hdir / H_HELDOUT_NAME).exists() else None

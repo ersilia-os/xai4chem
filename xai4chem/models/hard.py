@@ -46,10 +46,12 @@ def blend_ceiling(alignment_r2, task="binary"):
 
 
 def ramp(T, t_lo=T_LO, t_hi=T_HI):
+    """The gate's ramp: 0 below ``t_lo``, 1 above ``t_hi``, linear between."""
     return np.clip((np.asarray(T) - t_lo) / (t_hi - t_lo), 0.0, 1.0)
 
 
 def apply_isotonic(h, iso):
+    """Carry H's margins onto S's scale through the isotonic map."""
     return np.interp(h, iso["x"], iso["y"])
 
 
@@ -188,6 +190,7 @@ def train_hard_model(X, y, task, sparse, seed=42):
 
 
 def metric_text(heldout):
+    """The head's headline held-out metric as text: AUROC for a classifier, Spearman for a regressor."""
     return f"AUROC {heldout['auroc']:.3f}" if "auroc" in heldout else f"ρ {heldout['spearman']:.3f}"
 
 

@@ -19,6 +19,7 @@ HARD_SEPARATORS = ("_", "-")
 
 
 def read_table(path):
+    """Read a CSV, TSV or parquet table, by its extension."""
     import pandas as pd
 
     suffix = Path(path).suffix.lower()
@@ -65,6 +66,7 @@ def check_smiles_column(df, column, path, flag=None):
 
 
 def read_smiles(path, column=None):
+    """The SMILES of a table, as strings, with the column found by name or convention."""
     df = read_table(path)
     sc = smiles_column(df, column)
     check_smiles_column(df, sc, path)

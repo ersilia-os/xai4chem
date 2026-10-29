@@ -29,6 +29,7 @@ def set_active_color(color: str) -> None:
 
 
 def active_color() -> str:
+    """The accent colour of the current console theme."""
     return _active_color
 
 
@@ -243,6 +244,7 @@ def sweep_progress(verb: str, total: int, *, width: int = 24):
     with live_status() as update:
 
         def tick(done: int) -> None:
+            """Advance the status line to ``done`` of ``total``, with rate and ETA."""
             done = min(int(done), total)
             frac = done / total
             took = time.time() - started
@@ -505,15 +507,19 @@ class _TableHandle(object):
         self.table = table
 
     def start(self, item):
+        """A row begins; its text is escaped, since names are user data."""
         self.table.start(escape(str(item)))
 
     def update(self, item, **values):
+        """A row's values change; they are escaped."""
         self.table.update(escape(str(item)), **_escaped(values))
 
     def finish(self, item, ok=True, **values):
+        """A row ends; its values are escaped."""
         self.table.finish(escape(str(item)), ok=ok, **_escaped(values))
 
     def status(self, verb, done=None, total=None, **pairs):
+        """Repaint the status line, with the count and the extra pairs shown beside it."""
         frac = done / total if done is not None and total else None
         shown = [(k.replace("_", " "), v) for k, v in pairs.items()]
         if done is not None and total:

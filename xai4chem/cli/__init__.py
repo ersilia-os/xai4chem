@@ -9,6 +9,7 @@ from xai4chem.cli.create_cli import create_cli
 
 
 def main():
+    """Entry point of the ``xai4chem`` command."""
     create_cli()()
 
 

@@ -18,15 +18,19 @@ from contextlib import contextmanager
 
 class _SilentTable(object):
     def start(self, item):
+        """A row begins."""
         pass
 
     def update(self, item, **values):
+        """A row's values change."""
         pass
 
     def finish(self, item, ok=True, **values):
+        """A row ends, successfully or not."""
         pass
 
     def status(self, verb, done=None, total=None, **pairs):
+        """One repainting status line for a long loop."""
         pass
 
 

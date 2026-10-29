@@ -43,27 +43,33 @@ H_HELDOUT_NAME = "h_heldout.npz"
 
 
 def column_id(index):
+    """The directory name of the ``index``-th teacher column."""
     return f"c{index}"
 
 
 def column_dir(model_dir, col_id):
+    """The directory of one teacher column's models."""
     return Path(model_dir) / COLUMNS_DIRNAME / col_id
 
 
 def hard_dir(model_dir, col_id):
+    """The directory of a column's hard head."""
     return column_dir(model_dir, col_id) / HARD_DIRNAME
 
 
 def has_hard_head(model_dir, col_id):
+    """Whether a column was fitted with hard labels."""
     return (hard_dir(model_dir, col_id) / HARD_META_NAME).exists()
 
 
 def read_json(path):
+    """Read a JSON file."""
     with open(path) as f:
         return json.load(f)
 
 
 def write_json(path, data):
+    """Write a JSON file, creating its directory."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     with open(path, "w") as f:
@@ -71,6 +77,7 @@ def write_json(path, data):
 
 
 def read_manifest(model_dir):
+    """Read a model's manifest, with a pointer to ``fit`` if the directory is not a model."""
     path = Path(model_dir) / MANIFEST_NAME
     if not path.exists():
         hint = "it does not exist" if not Path(model_dir).exists() else f"it has no {MANIFEST_NAME}"
@@ -81,6 +88,7 @@ def read_manifest(model_dir):
 
 
 def write_manifest(model_dir, manifest):
+    """Write a model's manifest, stamped with the current schema."""
     manifest = dict(manifest)
     manifest["schema"] = SCHEMA
     write_json(Path(model_dir) / MANIFEST_NAME, manifest)

@@ -119,6 +119,7 @@ def explain_panel(model, library, rows=PANEL_ROWS, display=SILENT):
             total = len(panel) + n_lab
 
             def status(done, total=total):
+                """Forward the TreeSHAP progress to the live table."""
                 table.status("TreeSHAP", done, total)
 
             acc, first = Accumulator(len(names)), None

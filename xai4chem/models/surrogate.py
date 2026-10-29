@@ -59,12 +59,14 @@ def to_model_input(X, sparse):
 
 
 def dmatrix(X, sparse, label=None):
+    """Build an XGBoost DMatrix, treating sparse zeros as missing as the surrogate was trained."""
     import xgboost as xgb
 
     return xgb.DMatrix(to_model_input(X, sparse), label=label)
 
 
 def predict_margin(booster, X, sparse):
+    """The booster's raw output, which for S is the teacher's own scale."""
     return booster.predict(dmatrix(X, sparse), output_margin=True)
 
 
@@ -169,10 +171,13 @@ def _RoundCallback(on_round, total):
     import xgboost as xgb
 
     class RoundCallback(xgb.callback.TrainingCallback):
+        """Report the validation RMSE and the best so far after every boosting round."""
+
         def __init__(self):
             self.best = float("inf")
 
         def after_iteration(self, model, epoch, evals_log):
+            """Called by XGBoost after each round; returning False keeps training."""
             rmse = evals_log["val"]["rmse"][-1]
             self.best = min(self.best, rmse)
             on_round(epoch + 1, total, rmse, self.best)

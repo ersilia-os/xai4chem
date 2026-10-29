@@ -36,14 +36,17 @@ ERSILIA_LIBRARY_NAME = "erl0"
 
 
 def home_dir():
+    """The xai4chem home: ``$XAI4CHEM_HOME`` or ``~/.xai4chem``."""
     return Path(os.environ.get("XAI4CHEM_HOME", Path.home() / ".xai4chem"))
 
 
 def default_library_dir():
+    """Where ``setup`` puts the reference library and everything reads it from."""
     return home_dir() / "library"
 
 
 def write_manifest(library_dir, manifest):
+    """Write ``library.json``, the record of the library's files and checksums."""
     (Path(library_dir) / LIBRARY_JSON).write_text(json.dumps(manifest, indent=2))
 
 
@@ -311,6 +314,7 @@ def library_for_model(manifest, library_dir=None):
     record = manifest["library"]
 
     def matches(library):
+        """Whether a library is the one the model was fitted against, by name and size."""
         return library.name == record["name"] and len(library) == int(record["n_molecules"])
 
     if library_dir is not None:

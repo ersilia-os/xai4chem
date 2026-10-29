@@ -41,6 +41,7 @@ def _highlights(mol, scores, vmax, threshold=0.04):
 
 
 def prepare(mol):
+    """A copy of the molecule with 2D coordinates, for drawing."""
     mol = Chem.Mol(mol)
     rdDepictor.SetPreferCoordGen(True)
     AllChem.Compute2DCoords(mol)

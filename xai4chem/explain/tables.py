@@ -8,6 +8,7 @@ COMPARE_TOP = 12
 
 
 def cosine(a, b):
+    """Cosine similarity of two vectors; NaN if either has no length."""
     na, nb = np.linalg.norm(a), np.linalg.norm(b)
     return float(a @ b / (na * nb)) if na > 0 and nb > 0 else float("nan")
 

@@ -23,6 +23,7 @@ def _generator():
 
 
 def morgan_featurizer(smiles):
+    """Morgan counts, identical to Olinda's, one row per SMILES (zeros if unparseable)."""
     gen = _generator()
     X = np.zeros((len(smiles), NBITS), dtype=np.uint8)
     for i, smi in enumerate(smiles):

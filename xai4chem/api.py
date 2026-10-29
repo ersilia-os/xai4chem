@@ -122,11 +122,9 @@ def fit(
         ``model_dir``; ``columns``, one global summary per column (fidelity, top features and, with a hard
         head, its held-out metric, ``a_max`` and reach); ``report``, its path or None; ``elapsed`` seconds.
     """
-    from xai4chem.data.features import align_to_library, load_features
-    from xai4chem.data.io import match_hard_columns, read_labels
+    from xai4chem.data.features import load_features
+    from xai4chem.data.io import read_labels
     from xai4chem.data.library import ReferenceLibrary
-    from xai4chem.explain.panel import PANEL_ROWS, explain_panel
-    from xai4chem.models.model import XAIModel
     from xai4chem.models.surrogate import N_ESTIMATORS
     from xai4chem.run import MANIFEST_NAME
 
@@ -139,24 +137,61 @@ def fit(
     library = ReferenceLibrary(library_dir)
     feat = library.featurizer(featurizer)
     smiles, Y = read_labels(soft_labels)
-    mapping, hard = {}, None
-    if hard_labels is not None:
-        # Fail on a column mismatch or an unusable column now, not after minutes of boosting
-        from xai4chem.models.hard import check_hard_labels, resolve_task
-        from xai4chem.models.model import valid_mask
-
-        hard = read_labels(hard_labels, label_cols=hard_columns)
-        mapping = match_hard_columns([str(c) for c in Y.columns], [str(c) for c in hard[1].columns])
-        usable = valid_mask(hard[0])  # the same rows the head is trained on: a SMILES RDKit cannot parse is dropped
-        for hard_name in mapping:
-            y = hard[1][hard_name].to_numpy(dtype=np.float64)
-            y = y[np.isfinite(y) & usable]
-            check_hard_labels(hard_name, y, resolve_task(y, task, f"hard column '{hard_name}'"))
+    mapping, hard = _check_hard(hard_labels, hard_columns, task, Y)
     total = 5 if hard_labels is not None else 4
     if not report:
         total -= 1
 
     display.step(1, total, "Reading soft labels")
+    smiles, rows, Y = _read_soft(smiles, Y, library, feat, display)
+    X = load_features(smiles, rows, library, feat, display)
+
+    try:
+        display.step(2, total, "Learning S, the surrogate of the teacher")
+        model_dir.mkdir(parents=True, exist_ok=True)
+        Z, columns = _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators or N_ESTIMATORS, display)
+        _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns, seed)
+
+        if hard_labels is not None:
+            display.step(3, total, "Learning H from the hard labels")
+            _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, task, display)
+
+        step = 4 if hard_labels is not None else 3
+        summaries, out = _explain_and_report(model_dir, library, panel_rows, report, step, total, display)
+        return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
+    except BaseException:  # a half-written model would load, soft-only, without a word
+        shutil.rmtree(model_dir, ignore_errors=True)
+        raise
+
+
+def _check_hard(hard_labels, hard_columns, task, Y):
+    """Read the hard labels and refuse a mismatch or an unusable column now, not after minutes of boosting.
+
+    Returns ``(mapping, hard)``: hard column to soft column, and the ``(smiles, labels)`` read; both empty
+    without hard labels.
+    """
+    if hard_labels is None:
+        return {}, None
+    from xai4chem.data.io import match_hard_columns, read_labels
+    from xai4chem.models.hard import check_hard_labels, resolve_task
+    from xai4chem.models.model import valid_mask
+
+    hard = read_labels(hard_labels, label_cols=hard_columns)
+    mapping = match_hard_columns([str(c) for c in Y.columns], [str(c) for c in hard[1].columns])
+    usable = valid_mask(hard[0])  # the same rows the head is trained on: a SMILES RDKit cannot parse is dropped
+    for hard_name in mapping:
+        y = hard[1][hard_name].to_numpy(dtype=np.float64)
+        y = y[np.isfinite(y) & usable]
+        check_hard_labels(hard_name, y, resolve_task(y, task, f"hard column '{hard_name}'"))
+    return mapping, hard
+
+
+def _read_soft(smiles, Y, library, feat, display):
+    """Match the soft labels to the library, drop unparseable SMILES and run Olinda's target checks.
+
+    Returns ``(smiles, rows, Y)``, with ``rows`` the library row of each molecule (-1 if absent).
+    """
+    from xai4chem.data.features import align_to_library
     from xai4chem.models.model import valid_mask
     from xai4chem.models.surrogate import check_target
 
@@ -172,33 +207,24 @@ def fit(
             display.note(warning, "warning")
     display.note(f"{_plural(len(smiles), 'molecule')} · {_plural(Y.shape[1], 'column')} · {feat.description}")
     display.note(f"{int((rows >= 0).sum()):,} of them in the {library.name} reference library")
-    X = load_features(smiles, rows, library, feat, display)
+    return smiles, rows, Y
 
-    try:
-        display.step(2, total, "Learning S, the surrogate of the teacher")
-        model_dir.mkdir(parents=True, exist_ok=True)
-        Z, columns = _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators or N_ESTIMATORS, display)
-        _write_model(model_dir, library, feat, soft_labels, smiles, rows, Z, columns, seed)
 
-        if hard_labels is not None:
-            display.step(3, total, "Learning H from the hard labels")
-            _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed, task, display)
+def _explain_and_report(model_dir, library, panel_rows, report, step, total, display):
+    """Explain the library panel with the fitted model and write the report. Returns ``(summaries, report_path)``."""
+    from xai4chem.explain.panel import PANEL_ROWS, explain_panel
+    from xai4chem.models.model import XAIModel
 
-        step = 4 if hard_labels is not None else 3
-        display.step(step, total, "Explaining the library panel")
-        model = XAIModel(model_dir, check_golden=False)
-        summaries = explain_panel(model, library, rows=panel_rows or PANEL_ROWS, display=display)
+    display.step(step, total, "Explaining the library panel")
+    model = XAIModel(model_dir, check_golden=False)
+    summaries = explain_panel(model, library, rows=panel_rows or PANEL_ROWS, display=display)
+    out = None
+    if report:
+        from xai4chem.report.model_report import write_report
 
-        out = None
-        if report:
-            from xai4chem.report.model_report import write_report
-
-            display.step(step + 1, total, "Writing the report")
-            out = write_report(model_dir)
-        return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
-    except BaseException:  # a half-written model would load, soft-only, without a word
-        shutil.rmtree(model_dir, ignore_errors=True)
-        raise
+        display.step(step + 1, total, "Writing the report")
+        out = write_report(model_dir)
+    return summaries, out
 
 
 def _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators, display):
@@ -215,6 +241,7 @@ def _learn_soft(X, Y, feat, model_dir, reweight, seed, n_estimators, display):
             col_started = time.time()
 
             def on_round(done, total, rmse, best, name=name):
+                """Forward each boosting round to the live table."""
                 table.status("boosting", done, total, val_RMSE=f"{rmse:.4f}", best=f"{best:.4f}")
 
             fitted = fit_column(

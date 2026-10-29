@@ -31,6 +31,7 @@ def binarize(X):
 
 
 def fingerprints(smiles):
+    """Binary Morgan fingerprints of SMILES, as the gate's Tanimoto sees them."""
     return binarize(morgan_featurizer(list(smiles)))
 
 

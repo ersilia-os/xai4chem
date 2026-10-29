@@ -78,14 +78,17 @@ details > summary { cursor:pointer; color:var(--brand); font-weight:450; }
 
 
 def esc(value):
+    """HTML-escape any value as text."""
     return html.escape(str(value))
 
 
 def css():
+    """The vendored Ersilia design-system stylesheet."""
     return resources.files("xai4chem").joinpath("report/assets/ersilia.css").read_text()
 
 
 def page(title, eyebrow, wordmark, lede, body, layout="document"):
+    """A complete, script-free HTML page around ``body``."""
     return _PAGE.format(
         title=esc(title),
         favicon=FAVICON,
@@ -101,21 +104,25 @@ def page(title, eyebrow, wordmark, lede, body, layout="document"):
 
 
 def section(title, content, hint=None):
+    """A titled section, with an optional faint hint after the title."""
     hint_html = f' <span class="faint" style="font-weight:400">· {esc(hint)}</span>' if hint else ""
     return f'<section class="section"><h2>{esc(title)}{hint_html}</h2>{content}</section>'
 
 
 def stat(key, value, sub=None, tip=None):
+    """One labelled number for a row of KPIs, with an optional sub-line and tooltip."""
     tip_attr = f' title="{esc(tip)}"' if tip else ""
     sub_html = f'<div class="d">{sub}</div>' if sub else ""
     return f'<div class="stat"{tip_attr}><div class="k">{esc(key)}</div><div class="v">{value}</div>{sub_html}</div>'
 
 
 def kpis(stats):
+    """A row of :func:`stat` tiles."""
     return f'<div class="kpis">{"".join(stats)}</div>'
 
 
 def badge(text, kind=None, hue=None):
+    """A small pill of text, optionally coloured by kind or hue."""
     cls = f"badge {kind}" if kind else "badge"
     style = f' style="--c:var(--{hue})"' if hue else ""
     return f'<span class="{cls}"{style}>{esc(text)}</span>'

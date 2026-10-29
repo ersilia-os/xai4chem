@@ -67,6 +67,7 @@ def _nothing():
 
 
 def valid_mask(smiles):
+    """True for each SMILES RDKit can parse."""
     return np.array([Chem.MolFromSmiles(s) is not None for s in smiles], dtype=bool)
 
 

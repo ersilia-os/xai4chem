@@ -6,6 +6,7 @@ MAX_NA = 0.1
 
 
 def datamol_featurizer(smiles_list):
+    """datamol descriptors for each SMILES; an unparseable SMILES is a row of NaN."""
     R = []
     for smiles in smiles_list:
         mol = dm.to_mol(smiles)

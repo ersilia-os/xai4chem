@@ -9,10 +9,12 @@ FEATURIZERS = ["morgan", "accfg", "datamol"]
 
 
 def model_dir(help_text="Model directory."):
+    """The ``--model-dir`` option shared by the commands that read a model."""
     return click.option("--model-dir", "-m", required=True, type=click.Path(file_okay=False), help=help_text)
 
 
 def library_dir():
+    """The ``--library-dir`` option shared by the commands that read the reference library."""
     return click.option(
         "--library-dir",
         default=None,
@@ -25,6 +27,7 @@ def molecules_input(verb):
     """``--input`` (a table) or ``--smiles`` (repeatable), one of the two."""
 
     def decorator(func):
+        """Add the molecule input and output options to a command."""
         func = click.option(
             "--smiles", "-S", "smiles_list", multiple=True, help=f"A SMILES to {verb} (repeatable), instead of --input."
         )(func)
@@ -63,6 +66,7 @@ def friendly_errors(func):
 
     @functools.wraps(func)
     def wrapper(*args, **kwargs):
+        """Turn expected failures into a one-line click error instead of a traceback."""
         try:
             return func(*args, **kwargs)
         except (FileNotFoundError, ValueError, KeyError, RuntimeError) as exc:
@@ -73,6 +77,7 @@ def friendly_errors(func):
 
 
 def plural(n, word):
+    """``n`` and ``word``, pluralised, for console messages."""
     return f"{n:,} {word}{'' if n == 1 else 's'}"
 
 

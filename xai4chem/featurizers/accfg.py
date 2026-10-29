@@ -11,12 +11,14 @@ REF_PATH = resources.files("xai4chem").joinpath("tools/accfg")
 
 
 def ref_features():
+    """Functional-group name to feature index, in the reference table's order."""
     df = pd.read_csv(os.path.join(REF_PATH, "fgs_all.csv"))
     fgs_ref = {fg: i for i, fg in enumerate(df["Functional Group"].tolist())}
     return fgs_ref
 
 
 def ref_smarts():
+    """SMARTS pattern to feature index, in the reference table's order."""
     df = pd.read_csv(os.path.join(REF_PATH, "fgs_all.csv"))
     smarts_ref = {sm: i for i, sm in enumerate(df["SMARTS Pattern"].tolist())}
     return smarts_ref
@@ -38,6 +40,7 @@ class _Matcher(object):
         self.n_features = len(fgs_ref)
 
     def match(self, mol):
+        """Atom tuples matched by each functional group in a molecule, by feature index."""
         out = {}
         for idx, query in self.queries:
             hits = mol.GetSubstructMatches(query, uniquify=True)
@@ -57,6 +60,7 @@ def _matcher():
 
 
 def accfg_featurizer(smi_list):
+    """Functional-group counts for each SMILES; an unparseable SMILES is a row of zeros."""
     m = _matcher()
     arr = np.zeros((len(smi_list), m.n_features), dtype=np.uint8)
     for i, s in enumerate(smi_list):
