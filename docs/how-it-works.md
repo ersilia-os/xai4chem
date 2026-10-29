@@ -42,6 +42,23 @@ Training uses Olinda's tuned defaults:
 Morgan and AccFG counts are passed as sparse matrices whose zeros are *missing*. For a count feature,
 "absent" and "missing" are the same split, and training only touches the ~3% of entries that are nonzero.
 
+### Where this differs from Olinda
+
+Inputs are handled as Olinda handles them (label matching, value-stratified split, task detection, column
+checks, weighting, label scaling, gate constants). What differs, on purpose:
+
+- **Descriptors and explanations.** xai4chem uses Morgan counts, AccFG or datamol descriptors, and explains with
+  TreeSHAP; there is no ONNX export.
+- **H is plain XGBoost.** Olinda trains its hard head with lazy-qsar's presets; here H is one gradient-boosted
+  model with early stopping on a stratified 20% split. `a_max` can therefore differ between the two for the same
+  data.
+- **a_max is judged on molecules H was fitted to.** The isotonic map is fitted on one half of the soft-labelled
+  library rows and judged on the other, but those rows include the labelled molecules H was refitted on, as in
+  Olinda. With a few thousand labels in a library of 1.36M this is negligible; with a small custom library it
+  makes `a_max` optimistic.
+- **No isotonic correction of S.** Olinda corrects the surrogate's own output with an isotonic map; that would
+  not be additive with the SHAP values, so S is explained as it is.
+
 ## Merging soft and hard explanations
 
 For one molecule, `a` is a number, so attributions combine linearly and exactly:

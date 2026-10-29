@@ -307,6 +307,22 @@ def test_regression_hard_labels_do_not_depend_on_their_unit(library, tmp_path):
     assert a_max[0] > 0 and a_max[1] == pytest.approx(a_max[0], abs=0.05)
 
 
+def test_a_hard_head_that_earns_no_weight_leaves_the_prediction_to_s(library, tmp_path):
+    """Measurements unrelated to the teacher give a_max = 0, so P equals S and the explanation is S's."""
+    root, lib = library
+    take = pd.read_csv(root / "soft.csv").sample(150, random_state=5)
+    noise = np.random.default_rng(1).integers(0, 2, len(take))
+    pd.DataFrame({"smiles": take.smiles, "activity": noise}).to_csv(tmp_path / "hard_noise.csv", index=False)
+    api.fit(
+        root / "soft.csv", tmp_path / "m", tmp_path / "hard_noise.csv", library_dir=lib, n_estimators=80, report=False
+    )
+    model = XAIModel(tmp_path / "m")
+    assert model.column("activity").hard.meta["a_max"] == 0.0
+    r = model.explain(QUERIES, columns=["activity"])["activity"]
+    np.testing.assert_allclose(r["P"], r["S"], atol=1e-6)
+    np.testing.assert_allclose(r["phi_P"], r["phi_S"], atol=1e-6)
+
+
 def test_a_failed_fit_leaves_no_half_written_model(library, tmp_path, monkeypatch):
     root, lib = library
 
