@@ -25,6 +25,11 @@ python scripts/build_reference_library.py --smiles erl0_smiles.csv --out data/er
 aws s3 sync data/erl0 s3://eosvc-public/xai4chem/data/erl0/ --exclude "morgan_bits_*" --exclude "*.tmp"
 ```
 
+`access.json` (`{"data": "public"}`) makes the repository's `data/` folder an eosvc folder: it is ignored by
+git and published under `s3://eosvc-public/xai4chem/data/`. `aws s3 sync` needs the `--exclude` flags above;
+with [eosvc](https://github.com/ersilia-os/eosvc) installed and configured (`eosvc config`), `eosvc upload
+--path data/erl0` publishes the same folder.
+
 The script featurizes the SMILES (about 2 hours, sequentially) or reuses matrices computed earlier, after
 checking a random sample of their rows against fresh featurization (see its docstring).
 
