@@ -24,10 +24,11 @@ molecule gets four views:
 
 ## What you get
 
-- **A model report** (`report.html`, written by `fit`):
-  - fidelity to the teacher
+- **A model report** (`report.html`, written by `fit`), in the style of Olinda's and ZairaChem's:
+  - fidelity to the teacher (agreement, residuals, calibration), as stylia figures
   - global importances and the top substructures, functional groups or descriptors
   - the hard head's held-out performance, calibration and reach
+  - every figure also as a PDF in `figures/`, and the numbers in `metrics.json` and `performance_table.csv`
 - **Molecule explanations** (`explain`):
   - atom maps (teacher, experiments, combined, disagreement)
   - top contributions, and the nearest labelled molecule

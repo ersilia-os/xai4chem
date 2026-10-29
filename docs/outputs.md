@@ -5,15 +5,18 @@
 ```
 models/my_model/
   manifest.json         featurizer, library, one entry per teacher column
-  report.html           the self-contained model report
-  targets.h5            soft labels (model scale) with their library rows (for `explain --domain`)
+  report.html           the model report: one file, with its figures embedded
+  figures/png, figures/pdf   every figure of the report (stylia, article style), PNG and vector PDF
+  metrics.json          the report's numbers per teacher column: MAE, RMSE, R², Pearson, Spearman, top-decile RMSE, hard head
+  performance_table.csv the same, one row per column
+  targets.h5            soft labels with their library rows (for `explain --domain`)
   golden.json           a few molecules with expected outputs, re-checked when the model loads
   bit_dictionary.json   Morgan bit names (Morgan models only)
   columns/c0/
     s.json              S (XGBoost JSON, trimmed to the best iteration)
-    soft_meta.json      scale, fidelity, trees, parameters
+    soft_meta.json      fidelity, rows, trees, reweighting, parameters
     fidelity.npz        held-out teacher vs S (for the report)
-    _hard/              h.json, h_to_s.json, labelled.csv, labelled_fp.npz, hard_meta.json
+    _hard/              h.json, h_to_s.json, h_heldout.npz, labelled.csv, labelled_fp.npz, hard_meta.json
     explain/            global_s.csv, global_hs.csv, summary.json, and the data behind the report's charts
 ```
 

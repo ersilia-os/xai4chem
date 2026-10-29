@@ -290,17 +290,26 @@ def _hard_inputs(hard, hard_labels, mapping, by_name, feat, display):
     return mapping, valid, Xh_all, binarize(Xh_all) if feat.name == "morgan" else fingerprints(smiles)
 
 
-def _save_hard_head(hdir, booster, iso_map, labelled, fps, meta):
+def _save_hard_head(hdir, booster, iso_map, labelled, fps, meta, held):
     """Write a hard head; ``hard_meta.json`` goes last, because its presence marks a complete head."""
     import scipy.sparse as sp
 
-    from xai4chem.run import H_NAME, H_TO_S_NAME, HARD_META_NAME, LABELLED_FP_NAME, LABELLED_NAME, write_json
+    from xai4chem.run import (
+        H_HELDOUT_NAME,
+        H_NAME,
+        H_TO_S_NAME,
+        HARD_META_NAME,
+        LABELLED_FP_NAME,
+        LABELLED_NAME,
+        write_json,
+    )
 
     hdir.mkdir(parents=True, exist_ok=True)
     booster.save_model(str(hdir / H_NAME))
     write_json(hdir / H_TO_S_NAME, iso_map)
     labelled.to_csv(hdir / LABELLED_NAME, index=False)
     sp.save_npz(hdir / LABELLED_FP_NAME, sp.csr_matrix(fps))
+    np.savez_compressed(hdir / H_HELDOUT_NAME, y=held[0], margin=held[1])
     write_json(hdir / HARD_META_NAME, meta)
 
 
@@ -334,7 +343,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 display.note(warning, "warning")
             Xh, fh = Xh_all[idx], fps_all[idx]
             table.status("fitting H")
-            booster, heldout = hd.train_hard_model(Xh, y, task, feat.sparse, seed)
+            booster, heldout, held = hd.train_hard_model(Xh, y, task, feat.sparse, seed)
             table.update(hard_name, **{"Held-out": hd.metric_text(heldout)})
 
             # Carry H onto S's scale over soft-labelled molecules, half to fit the map and half to judge it
@@ -363,7 +372,7 @@ def _learn_hard(hard, hard_labels, mapping, columns, X, Z, feat, model_dir, seed
                 "seed": seed,
             }
             labelled = pd.DataFrame({"smiles": [smiles[i] for i in idx], "label": y})
-            _save_hard_head(hard_dir(model_dir, col["id"]), booster, iso_map, labelled, fh, meta)
+            _save_hard_head(hard_dir(model_dir, col["id"]), booster, iso_map, labelled, fh, meta, held)
             table.finish(
                 hard_name,
                 **{"R² H_S": f"{alignment_r2:.3f}", "a_max": f"{a_max:.2f}"},

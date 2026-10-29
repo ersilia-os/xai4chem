@@ -25,6 +25,8 @@ click         = "8.5.0"
 rich          = "15.0.0"
 rich-click    = "1.9.9"
 loguru        = "0.7.3"
+matplotlib    = "3.11.2"
+stylia        = "1.0.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "9.1.1"

@@ -130,7 +130,10 @@ def check_hard_labels(name, y, task):
 
 
 def train_hard_model(X, y, task, sparse, seed=42):
-    """Early-stop on one stratified held-out split, report the metric there, then refit on every label."""
+    """Early-stop on one stratified held-out split, report the metric there, then refit on every label.
+
+    Returns the refitted booster, the held-out metric, and the held-out ``(labels, margins)`` for the figures.
+    """
     import xgboost as xgb
     from sklearn.metrics import roc_auc_score
 
@@ -159,7 +162,7 @@ def train_hard_model(X, y, task, sparse, seed=42):
     else:
         heldout = {"spearman": safe_spearman(y[val], pred)}
     heldout["n"] = int(len(val))
-    return xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=rounds), heldout
+    return xgb.train(params, dmatrix(X, sparse, label=y), num_boost_round=rounds), heldout, (y[val], pred)
 
 
 def metric_text(heldout):

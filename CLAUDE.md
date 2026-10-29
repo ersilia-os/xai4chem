@@ -36,7 +36,7 @@ Computation never prints. Long functions take a `display` (`xai4chem/progress.py
 | `xai4chem/data/` | `io` (tables, SMILES/id columns, hard→soft matching), `library` (read-only `ReferenceLibrary`), `build` (setting a library up), `features` (library rows or featurization), `similarity` (Tanimoto) |
 | `xai4chem/models/` | `surrogate` (S), `hard` (H, isotonic map, gate), `model` (`XAIModel`: load, golden check, scores, explain) |
 | `xai4chem/explain/` | `panel` (global statistics), `tables` (prediction/attribution rows, two-molecule comparison), `atoms` |
-| `xai4chem/report/` | `model_report`, `gallery`, `svg` (the report's charts), `drawing` (RDKit), `html` |
+| `xai4chem/report/` | `model_report`, `figures` (the report's plots), `style` (stylia look), `gallery`, `drawing` (RDKit), `html` |
 | `xai4chem/ui/` | `console` (Olinda's look), `render` (terminal tables), `log` (loguru, named so it never shadows the stdlib) |
 | `xai4chem/featurizers/` | morgan (Olinda-identical), accfg, datamol; one shared interface (see its `__init__`) |
 | `xai4chem/run.py` | the model directory's layout |
@@ -117,8 +117,9 @@ subprocess. The package `__init__` is lazy too (`__getattr__`).
 - ruff: canonical Ersilia config, at line length 120 (deviation documented in `ruff.toml`). Both
   `ruff check` and `ruff format` must pass.
 - Docstrings follow the NumPy convention. `D101`/`D102` are enforced. Say *why*, not what.
-- The report's charts are small inline SVGs (`report/svg.py`) in the Ersilia palette; no plotting library.
-  HTML uses the vendored Ersilia design system (`report/assets/ersilia.css`), with every page
-  self-contained and free of scripts.
+- The report's figures are drawn with stylia (`report/figures.py`, `report/style.py`), as in Olinda: article style,
+  semantic colour roles, every plot taking the axis it draws into, each written as PNG + PDF and the PNG embedded,
+  so the page stays one file. Never call `plt.figure` or `plt.savefig` directly. HTML uses the vendored Ersilia
+  design system (`report/assets/ersilia.css`), free of scripts.
 - Dependencies are pinned exactly in `pyproject.toml`.
 - Tests smoke-test the CLI and the maths on a ~1,000-molecule synthetic library. Keep the suite fast.

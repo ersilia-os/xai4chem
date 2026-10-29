@@ -1,22 +1,33 @@
-"""``report.html``: fidelity, what the teacher has learned, and the hard head, as one self-contained page."""
+"""``report.html``: fidelity, what the teacher has learned, and the hard head, as one self-contained page.
 
+Like Olinda's and ZairaChem's reports, the figures are drawn with stylia: each one is written as a PNG and a
+vector PDF under ``figures/`` and the PNG is embedded in the page, so the page stays a single file. Next to it
+go ``metrics.json`` and ``performance_table.csv``, the numbers behind the page in machine-readable form.
+"""
+
+import shutil
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
+from xai4chem.report import figures as F
 from xai4chem.report import html as H
-from xai4chem.report import svg
 from xai4chem.report.drawing import fragment_svg
 from xai4chem.run import (
     EXPLAIN_DIRNAME,
     FIDELITY_NAME,
+    FIGURES_DIRNAME,
+    H_HELDOUT_NAME,
     H_TO_S_NAME,
-    HARD_DIRNAME,
+    METRICS_NAME,
+    PERFORMANCE_NAME,
     REPORT_NAME,
     column_dir,
+    hard_dir,
     read_json,
     read_manifest,
+    write_json,
 )
 
 TOP = 20
@@ -104,18 +115,19 @@ def _substructures(table, bit_dictionary):
     return table[[radius(f) >= 1 for f in table["feature"]]].reset_index(drop=True)
 
 
-def _effects(plot_path):
+def _effects_data(plot_path):
     data = np.load(plot_path)
-    return svg.effects(data["phi"], data["values"], list(data["labels"]))
+    return list(data["labels"]), data["phi"], data["values"]
 
 
 def _training_details(meta):
+    fid = meta["fidelity"]
     rows = [
         ["Training rows", f"{meta['n_train']:,}"],
         ["Held-out rows", f"{meta['n_val']:,}"],
         ["Trees", f"{meta['n_trees']:,}"],
-        ["Fidelity", f"R² {_f(meta['fidelity']['r2'])} · RMSE {_f(meta['fidelity']['rmse'])}"],
-        ["Top-decile RMSE", _f(meta["fidelity"]["top_decile_rmse"])],
+        ["Fidelity", f"R² {_f(fid['r2'])} · RMSE {_f(fid['rmse'])} · MAE {_f(fid['mae'])}"],
+        ["Top-decile RMSE", _f(fid["top_decile_rmse"])],
         ["Reweighting", H.esc(f"{meta['reweight']['strategy']} ({meta['reweight']['reason']})")],
     ]
     rows += [[H.esc(k), H.esc(v)] for k, v in meta["params"].items()]
@@ -124,8 +136,80 @@ def _training_details(meta):
     )
 
 
+def _heldout_text(hard):
+    ho = hard["heldout"]
+    return f"AUROC {_f(ho['auroc'])}" if "auroc" in ho else f"ρ {_f(ho['spearman'])}"
+
+
+def _performance_rows(model_dir, manifest):
+    """One row of numbers per teacher column, the same ones the page, ``metrics.json`` and the CSV show."""
+    rows = []
+    for col in manifest["columns"]:
+        cdir = column_dir(model_dir, col["id"])
+        summary = read_json(cdir / EXPLAIN_DIRNAME / "summary.json")
+        meta = read_json(cdir / "soft_meta.json")
+        row = {"column": col["name"], **meta["fidelity"], "reweighting": meta["reweight"]["strategy"]}
+        hard = summary.get("hard")
+        if hard:
+            row.update(
+                hard_task=hard["task"],
+                hard_labels=hard["n_labels"],
+                hard_heldout=hard["heldout"],
+                a_max=hard["a_max"],
+                alignment_r2=hard["alignment_r2"],
+                reach=hard["reach"],
+            )
+        rows.append(row)
+    return rows
+
+
+def _write_metrics(model_dir, manifest, rows):
+    """``metrics.json`` and ``performance_table.csv``: the page's numbers, machine-readable."""
+    write_json(
+        Path(model_dir) / METRICS_NAME,
+        {
+            "xai4chem_version": manifest["xai4chem_version"],
+            "featurizer": manifest["featurizer"]["name"],
+            "columns": {r["column"]: {k: v for k, v in r.items() if k != "column"} for r in rows},
+        },
+    )
+    flat = []
+    for r in rows:
+        r = dict(r)
+        held = r.pop("hard_heldout", None) or {}
+        r.update({f"hard_{k}": v for k, v in held.items()})
+        flat.append(r)
+    pd.DataFrame(flat).to_csv(Path(model_dir) / PERFORMANCE_NAME, index=False)
+
+
+def _performance_table(rows):
+    cells = []
+    for r in rows:
+        hard = f"{r['hard_task']} · {_heldout_text({'heldout': r['hard_heldout']})}" if "hard_task" in r else "—"
+        cells.append(
+            [
+                H.esc(r["column"]),
+                f"{r['n']:,}",
+                _f(r["r2"]),
+                _f(r["spearman"]),
+                _f(r["rmse"]),
+                _f(r["top_decile_rmse"]),
+                H.esc(hard),
+                _f(r["a_max"], "{:.2f}") if "a_max" in r else "—",
+            ]
+        )
+    return H.table(
+        ["Column", "Held-out", "R²", "ρ", "RMSE", "Top-decile RMSE", "Hard head", "a_max"],
+        cells,
+        numeric=(1, 2, 3, 4, 5, 7),
+    )
+
+
 def write_report(model_dir, output=None):
     """Write the model report from what ``fit`` saved in the model directory.
+
+    Writes ``report.html``, the figures it embeds (``figures/png`` and ``figures/pdf``), ``metrics.json`` and
+    ``performance_table.csv``.
 
     Parameters
     ----------
@@ -149,13 +233,28 @@ def write_report(model_dir, output=None):
     if (model_dir / "bit_dictionary.json").exists():
         bit_dictionary = read_json(model_dir / "bit_dictionary.json")["bits"]
     smarts = featurizer_from_config(manifest["featurizer"]).smarts() if featurizer == "accfg" else None
-    body = []
+    figures_dir = model_dir / FIGURES_DIRNAME
+    shutil.rmtree(figures_dir, ignore_errors=True)  # a rewritten report must not keep a stale figure
+    prefix = (
+        Path(figures_dir).relative_to(output.parent).as_posix() + "/" if output.parent in figures_dir.parents else ""
+    )
+    rows = _performance_rows(model_dir, manifest)
+    _write_metrics(model_dir, manifest, rows)
+    body = [
+        H.section(
+            "Performance",
+            _performance_table(rows),
+            hint=f"held-out library molecules; the same numbers are in {METRICS_NAME} and {PERFORMANCE_NAME}",
+        )
+    ]
     for col in manifest["columns"]:
         exp = column_dir(model_dir, col["id"]) / EXPLAIN_DIRNAME
         hard = read_json(exp / "summary.json").get("hard")
-        body.append(_soft_section(model_dir, col, featurizer, bit_dictionary, smarts))
+        body.append(_soft_section(model_dir, figures_dir, prefix, col, featurizer, bit_dictionary, smarts))
         if hard:
-            body.append(_hard_section(col, hard, exp, featurizer, bit_dictionary, smarts))
+            body.append(
+                _hard_section(model_dir, figures_dir, prefix, col, hard, exp, featurizer, bit_dictionary, smarts)
+            )
     lede = (
         f"Surrogate of a teacher model, learned from soft labels over the {H.esc(manifest['library']['name'])} reference "
         f"library ({manifest['library']['n_molecules']:,} molecules) with {H.esc(featurizer)} features. "
@@ -174,7 +273,7 @@ def write_report(model_dir, output=None):
     return output
 
 
-def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
+def _soft_section(model_dir, figures_dir, prefix, col, featurizer, bit_dictionary, smarts):
     """What the teacher has learned, for one column: fidelity, figures, top features, training details."""
     cdir = column_dir(model_dir, col["id"])
     exp = cdir / EXPLAIN_DIRNAME
@@ -187,24 +286,43 @@ def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
         H.stat("Top-decile RMSE", _f(fid["top_decile_rmse"]), "error on the teacher's highest 10%"),
     ]
     if hard:
-        ho = hard["heldout"]
-        key, value = ("Held-out AUROC", ho["auroc"]) if "auroc" in ho else ("Held-out ρ", ho["spearman"])
+        key, value = (
+            ("Held-out AUROC", hard["heldout"]["auroc"])
+            if "auroc" in hard["heldout"]
+            else (
+                "Held-out ρ",
+                hard["heldout"]["spearman"],
+            )
+        )
         stats.append(H.stat(key, _f(value), f"H on {hard['n_labels']:,} labels"))
         stats.append(
             H.stat("a_max", _f(hard["a_max"], "{:.2f}"), f"R² of H_S vs teacher {_f(hard['alignment_r2'], '{:.2f}')}")
         )
     top_s = pd.read_csv(exp / "global_s.csv")
-    figs = []
+    cid = col["id"]
+
+    def draw(key, fn):
+        return F.render(fn, figures_dir, f"{cid}_{key}", key)
+
+    fidelity_figs = []
     if (cdir / FIDELITY_NAME).exists():
-        data = np.load(cdir / FIDELITY_NAME)
-        figs.append(
-            H.figure(
-                svg.density(data["teacher"], data["surrogate"], "Teacher", "Surrogate S"),
-                "Teacher against S on held-out library molecules.",
-            )
-        )
-    figs.append(H.figure(_effects(exp / "plot_s.npz"), "Effect of the top features on panel molecules."))
-    content = [H.kpis(stats), f'<div class="figrow2" style="margin-top:14px">{"".join(figs)}</div>']
+        pair = np.load(cdir / FIDELITY_NAME)
+        t, p = pair["teacher"], pair["surrogate"]
+        fidelity_figs = [
+            draw("correlation", lambda ax, st: F.correlation(ax, st, t, p, fid)),
+            draw("residuals", lambda ax, st: F.residuals(ax, st, t, p)),
+            draw("residual_structure", lambda ax, st: F.residual_structure(ax, st, t, p)),
+            draw("calibration", lambda ax, st: F.calibration(ax, st, t, p)),
+        ]
+    labels, phi, values = _effects_data(exp / "plot_s.npz")
+    explain_figs = [
+        draw(
+            "importance",
+            lambda ax, st: F.importance(ax, st, top_s["label"], top_s["mean_abs_shap"], top_s["direction"]),
+        ),
+        draw("effects", lambda ax, st: F.effects(ax, st, labels, phi, values)),
+    ]
+    content = [H.kpis(stats), H.figures(fidelity_figs, prefix), H.figures(explain_figs, prefix)]
     content.append(
         '<h3 style="margin-top:18px; font-size:13px">Top features</h3>'
         + _top_table(top_s, featurizer, bit_dictionary, smarts)
@@ -226,44 +344,53 @@ def _soft_section(model_dir, col, featurizer, bit_dictionary, smarts):
     )
 
 
-def _hard_section(col, hard, exp, featurizer, bit_dictionary, smarts):
+def _hard_section(model_dir, figures_dir, prefix, col, hard, exp, featurizer, bit_dictionary, smarts):
     reach = np.load(exp / "reach.npz")
+    cid = col["id"]
     stats = [
         H.stat("Task", hard["task"], f"{hard['n_labels']:,} labelled molecules"),
         H.stat("Reach", _f(hard["reach"], "{:.1%}"), f"of panel molecules have a > 0 (T ≥ {hard['t_lo']})"),
         H.stat("Agreement", _f(hard["importance_spearman_s_vs_hs"], "{:.2f}"), "S vs H_S importances (ρ)"),
         H.stat("Calibration", hard["isotonic_direction"], "isotonic H → S map"),
     ]
-    iso = read_json(Path(exp).parent / HARD_DIRNAME / H_TO_S_NAME)
-    figs = [
-        H.figure(
-            svg.curve(iso["x"], iso["y"], reach["h"], "H margin", "H_S (S scale)"),
-            "Isotonic map from H's margin onto S's scale; ticks are labelled molecules.",
-        ),
-    ]
-    if len(reach["T"]):
-        figs.append(
-            H.figure(
-                svg.histogram(
-                    reach["T"],
-                    "1-NN Tanimoto to the labelled set",
-                    "Panel molecules",
-                    vlines=(hard["t_lo"], hard["t_hi"]),
-                ),
-                "Similarity of panel molecules to the labelled set; dashed lines bound the gate's ramp.",
-            )
-        )
+    hdir = hard_dir(model_dir, cid)
+    iso = read_json(hdir / H_TO_S_NAME)
     top_h = pd.read_csv(exp / "global_hs.csv")
+    labels, phi, values = _effects_data(exp / "plot_hs.npz")
+
+    def draw(key, fn):
+        return F.render(fn, figures_dir, f"{cid}_{key}", key)
+
+    held = np.load(hdir / H_HELDOUT_NAME) if (hdir / H_HELDOUT_NAME).exists() else None
+    performance = None
+    if held is not None and "auroc" in hard["heldout"]:
+        performance = draw(
+            "hard_roc", lambda ax, st: F.hard_roc(ax, st, held["y"], held["margin"], hard["heldout"]["auroc"])
+        )
+    elif held is not None:
+        performance = draw(
+            "hard_agreement",
+            lambda ax, st: F.hard_agreement(ax, st, held["y"], held["margin"], hard["heldout"]["spearman"]),
+        )
+    gate_figs = [
+        performance,
+        draw("isotonic", lambda ax, st: F.isotonic(ax, st, iso["x"], iso["y"], reach["h"])),
+        draw("tanimoto", lambda ax, st: F.tanimoto(ax, st, reach["T"], hard["t_lo"], hard["t_hi"])),
+    ]
+    explain_figs = [
+        draw(
+            "hard_importance",
+            lambda ax, st: F.importance(ax, st, top_h["label"], top_h["mean_abs_shap"], top_h["direction"]),
+        ),
+        draw("hard_effects", lambda ax, st: F.effects(ax, st, labels, phi, values)),
+    ]
     content = [
         H.kpis(stats),
         f'<p class="muted" style="font-size:12px;margin-top:10px">Blend: P = (1 − a)·S + a·H_S with a = {hard["a_max"]:.2f} × '
         f"ramp(T), rising from 0 at T = {hard['t_lo']} to {hard['a_max']:.2f} at T = {hard['t_hi']}. a_max is the R² of H_S "
         "against the teacher on held-out library molecules, capped at 0.66.</p>",
-        f'<div class="figrow2" style="margin-top:14px">{"".join(figs)}</div>',
-        H.figure(
-            _effects(exp / "plot_hs.npz"),
-            "What the experiments say: effect of the top features on the labelled molecules.",
-        ),
+        H.figures(gate_figs, prefix),
+        H.figures(explain_figs, prefix),
         '<h3 style="margin-top:18px; font-size:13px">Top features according to the experiments</h3>'
         + _top_table(top_h, featurizer, bit_dictionary, smarts),
     ]

@@ -129,7 +129,9 @@ def test_model_directory(fitted):
     summary = json.loads((model_dir / "columns" / "c0" / "explain" / "summary.json").read_text())
     assert 0 <= summary["hard"]["reach"] <= 1 and summary["fidelity"]["r2"] > 0.5
     text = (model_dir / "report.html").read_text()
-    assert "<svg" in text and 'src="http' not in text and '<link rel="stylesheet"' not in text  # self-contained
+    assert (
+        "data:image/png;base64," in text and 'src="http' not in text and '<link rel="stylesheet"' not in text
+    )  # self-contained
 
 
 def test_explain_and_predict_commands(fitted):

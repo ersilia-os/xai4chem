@@ -192,8 +192,15 @@ def safe_spearman(a, b):
     return float(spearmanr(a, b).statistic)
 
 
+def _safe_pearson(a, b):
+    """Pearson's r, or NaN (quietly) when undefined: fewer than 3 points or a constant input."""
+    if len(a) < 3 or np.ptp(a) == 0 or np.ptp(b) == 0:
+        return float("nan")
+    return float(np.corrcoef(a, b)[0, 1])
+
+
 def fidelity(y_true, y_pred):
-    """R², Spearman ρ and RMSE of predictions against the teacher, and the RMSE on its top decile.
+    """MAE, RMSE, R², Pearson r, Spearman ρ and the top-decile RMSE of predictions against the teacher.
 
     The top-decile RMSE (rows where the teacher is at or above its 90th percentile, as in Olinda) shows how
     well the sparse high-value tail is reproduced, which the global R² can hide.
@@ -207,6 +214,8 @@ def fidelity(y_true, y_pred):
         "r2": 1 - ss_res / ss_tot if ss_tot > 0 else float("nan"),
         "spearman": safe_spearman(y_true, y_pred),
         "rmse": float(np.sqrt(ss_res / max(len(y_true), 1))),
+        "mae": float(np.abs(y_true - y_pred).mean()) if len(y_true) else float("nan"),
+        "pearson": _safe_pearson(y_true, y_pred),
         "top_decile_rmse": float(np.sqrt(((y_true[tail] - y_pred[tail]) ** 2).mean())) if tail.any() else float("nan"),
         "n": int(len(y_true)),
     }

@@ -53,6 +53,10 @@ EXTRA_CSS = """
 .ibar { display:inline-block; vertical-align:middle; height:6px; border-radius:999px; background:var(--brand); opacity:.75; }
 td .frag svg { width:64px; height:64px; display:block; }
 figcaption { font-size:11.5px; color:var(--muted); margin-top:6px; }
+.figgrid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:16px; margin-top:14px; align-items:start; }
+.figgrid figure { margin:0; }
+.figgrid img { width:100%; height:auto; display:block; }
+.figgrid figcaption b { color:var(--ink); font-weight:600; }
 .contrib { display:grid; grid-template-columns:minmax(0,1fr) 120px 58px; gap:4px 10px; align-items:center; font-size:12px; }
 .contrib .lbl { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .contrib .bar { position:relative; height:8px; background:var(--surface-2); border-radius:999px; }
@@ -150,7 +154,16 @@ def contributions(items, scale=None):
     return f'<div class="contrib">{"".join(rows)}</div>'
 
 
-def figure(svg, caption=None):
-    """An inline SVG chart with an optional caption."""
-    cap = f"<figcaption>{caption}</figcaption>" if caption else ""
-    return f"<figure>{svg}{cap}</figure>"
+def image(fig, href_prefix=""):
+    """A figure drawn by :func:`xai4chem.report.figures.render`, embedded, with its caption and a PDF link."""
+    pdf = f' · <a href="{esc(href_prefix + fig["pdf"])}">PDF</a>' if fig.get("pdf") else ""
+    return (
+        f'<figure><img src="{fig["data_uri"]}" alt="{esc(fig["title"])}">'
+        f"<figcaption><b>{esc(fig['title'])}</b> · {esc(fig['caption'])}{pdf}</figcaption></figure>"
+    )
+
+
+def figures(figs, href_prefix=""):
+    """A responsive grid of figures; ``None`` entries (a plot that declined) are left out."""
+    figs = [f for f in figs if f is not None]
+    return f'<div class="figgrid">{"".join(image(f, href_prefix) for f in figs)}</div>' if figs else ""

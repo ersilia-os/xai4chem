@@ -36,6 +36,10 @@ LABELLED_NAME = "labelled.csv"
 LABELLED_FP_NAME = "labelled_fp.npz"
 HARD_META_NAME = "hard_meta.json"
 REPORT_NAME = "report.html"
+FIGURES_DIRNAME = "figures"
+METRICS_NAME = "metrics.json"
+PERFORMANCE_NAME = "performance_table.csv"
+H_HELDOUT_NAME = "h_heldout.npz"
 
 
 def column_id(index):

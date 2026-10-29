@@ -19,6 +19,10 @@
   values are warned about. The validation split is value-stratified (equally spaced ranks), not random.
 - Hard-label inputs follow Olinda's limits: at least 4 usable rows (20 for a regression column, 2 of each class
   for a binary one) and no single-valued columns, refused before training instead of left soft-only.
+- The report follows Olinda's and ZairaChem's: figures are drawn with stylia (agreement, residuals, calibration,
+  importances, effects, and for a hard head its ROC or agreement, the H → S map and its reach), written as PNG and
+  vector PDF under `figures/` and embedded in `report.html`, with `metrics.json` and `performance_table.csv`
+  beside it. Fidelity now also reports MAE and Pearson r. `matplotlib` and `stylia` are dependencies again.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 ## 1.1.0
