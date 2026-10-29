@@ -17,7 +17,7 @@ class DatamolDescriptor(object):
     """Datamol's global physicochemical descriptors.
 
     Fitting drops descriptors with too many missing values or no variance, and learns median imputation.
-    v1 also discretized descriptors into quantile bins; v2 keeps raw values, because SHAP dependence on a
+    xai4chem 1.0 also discretized descriptors into quantile bins; raw values are kept now, because SHAP dependence on a
     raw descriptor (e.g. logP) is what a chemist can read.
     """
 

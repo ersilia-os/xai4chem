@@ -105,7 +105,7 @@ class MorganFingerprint(object):
 
     def atom_groups(self, mol):
         """For each feature present in ``mol``, the atom-index tuples of its occurrences."""
-        # Each occurrence is attributed to its centre atom, as in xai4chem v1
+        # Each occurrence is attributed to its centre atom, as in xai4chem 1.0
         return {bit: [(center,) for center, _ in occ] for bit, occ in morgan_bit_info(mol).items()}
 
     def molecule_labels(self, mol):

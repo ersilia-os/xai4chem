@@ -1,10 +1,10 @@
 # Changelog
 
-## 2.0.0
+## 1.1.0
 
 A rewrite around the logic of [Olinda](https://github.com/ersilia-os/olinda). xai4chem now explains a
 surrogate of a teacher model, learned from soft labels over Ersilia's 1.36M-molecule reference library, and
-optionally refines it with hard labels. See [docs/migrating-from-v1.md](docs/migrating-from-v1.md).
+optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/migrating-from-1.0.md).
 
 **Models**
 - S: XGBoost surrogate of the teacher.
@@ -53,6 +53,6 @@ optionally refines it with hard labels. See [docs/migrating-from-v1.md](docs/mig
 - ruff, pre-commit, GitHub Actions on Python 3.10 and 3.12, and a test suite on a synthetic library.
 
 **Removed**
-- The v1 `Regressor` and the old CLI commands (`explain_global`, `explain_mols`).
+- The 1.0 `Regressor` and the old CLI commands (`explain_global`, `explain_mols`).
 - The `shap`, `matplotlib`, `stylia`, `optuna` and `psutil` dependencies.
-- The v1 notebook.
+- The 1.0 notebook.

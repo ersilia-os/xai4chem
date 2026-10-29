@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "xai4chem"
-version = "2.0.0"
+version = "1.1.0"
 description = "Explainable surrogates of chemistry models, learned from soft labels over Ersilia's reference library"
 authors = ["Ersilia Open Source Initiative <hello@ersilia.io>", "Jason Hlozek <jason.hlozek@uct.ac.za>", "Hellen Namulinda <hellennamulinda@gmail.com>", "Gemma Turon <gemma@ersilia.io>", "Miquel Duran-Frigola <miquel@ersilia.io>"]
 license = "GPL-3.0-only"

@@ -1,10 +1,10 @@
-# Migrating from xai4chem 1.x
+# Migrating from xai4chem 1.0
 
-Version 2 changes what xai4chem learns from. v1 trained a model on a few hundred measurements and
-explained it. v2 explains a **surrogate of a teacher model**, learned from the teacher's outputs over
+Version 1.1 changes what xai4chem learns from. 1.0 trained a model on a few hundred measurements and
+explained it. 1.1 explains a **surrogate of a teacher model**, learned from the teacher's outputs over
 Ersilia's 1.36M-molecule reference library, and treats measurements as an optional refinement.
 
-| v1 | v2 |
+| 1.0 | 1.1 |
 |---|---|
 | `xai4chem explain_global -i data.csv -o out -r morgan` | `xai4chem fit -s soft.csv -m models/x -f morgan` (soft labels from a teacher), optionally `-h measurements.csv` |
 | `xai4chem explain_mols -i mols.csv -m model.pkl -o out` | `xai4chem explain -m models/x -i mols.csv -o out` |
