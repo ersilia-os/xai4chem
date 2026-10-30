@@ -130,21 +130,22 @@ def fit(
     """
     from xai4chem.data.features import load_features
     from xai4chem.data.io import read_labels
-    from xai4chem.models.surrogate import N_ESTIMATORS
+    from xai4chem.models.surrogate import N_ESTIMATORS, check_target
     from xai4chem.run import MANIFEST_NAME
 
     started = time.time()
     model_dir = Path(model_dir)
-    if (model_dir / MANIFEST_NAME).exists():
-        if not force:
-            raise ValueError(f"{model_dir} already holds a model. Pass --force to overwrite it.")
-        shutil.rmtree(model_dir)
-    library = _ready_library(library_dir, featurizer, display)
-    feat = library.featurizer(featurizer)
+    if (model_dir / MANIFEST_NAME).exists() and not force:
+        raise ValueError(f"{model_dir} already holds a model. Pass --force to overwrite it.")
+    # Refuse bad inputs before anything slow (a first-run download) or destructive (--force) happens
     smiles, Y = read_labels(soft_labels, label_cols=soft_columns)
     if max_samples is not None:
         smiles, Y = smiles[:max_samples], Y.iloc[:max_samples].reset_index(drop=True)
+    for name in Y.columns:
+        check_target(str(name), Y[name].to_numpy(dtype=np.float64))
     mapping, hard = _check_hard(hard_labels, hard_columns, task, Y)
+    library = _ready_library(library_dir, featurizer, display)
+    feat = library.featurizer(featurizer)
     total = 5 if hard_labels is not None else 4
     if not report:
         total -= 1
@@ -153,6 +154,9 @@ def fit(
     smiles, rows, Y = _read_soft(smiles, Y, library, feat, display)
     X = load_features(smiles, rows, library, feat, display)
 
+    if (model_dir / MANIFEST_NAME).exists():
+        shutil.rmtree(model_dir)
+    before = {p.name for p in model_dir.iterdir()} if model_dir.exists() else None
     try:
         display.step(2, total, "Learning S, the surrogate of the teacher")
         model_dir.mkdir(parents=True, exist_ok=True)
@@ -167,8 +171,18 @@ def fit(
         summaries, out = _explain_and_report(model_dir, library, panel_rows, report, step, total, display)
         return {"model_dir": model_dir, "columns": summaries, "report": out, "elapsed": time.time() - started}
     except BaseException:  # a half-written model would load, soft-only, without a word
-        shutil.rmtree(model_dir, ignore_errors=True)
+        _discard(model_dir, before)
         raise
+
+
+def _discard(model_dir, before):
+    """Remove what a failed fit wrote: the directory if it made it, else only the entries it added."""
+    if before is None:
+        shutil.rmtree(model_dir, ignore_errors=True)
+        return
+    for entry in model_dir.iterdir():
+        if entry.name not in before:
+            shutil.rmtree(entry, ignore_errors=True) if entry.is_dir() else entry.unlink(missing_ok=True)
 
 
 def _ready_library(library_dir, featurizer, display):
@@ -183,7 +197,7 @@ def _ready_library(library_dir, featurizer, display):
         if featurizer in library.featurizers:
             return library
         display.note(f"the reference library has no {featurizer} features yet; adding them")
-    except (FileNotFoundError, ValueError):  # absent, or written by an older xai4chem
+    except FileNotFoundError:  # an older library raises ValueError instead: that one is the user's to replace
         display.note("no reference library yet; setting up Ersilia's (once)")
     return setup(None, ["morgan", featurizer], library_dir, display=Nested(display))
 
@@ -496,6 +510,8 @@ def explain(model, smiles, output_dir="explanations", ids=None, domain=False, di
     started = time.time()
     model = _load(model)
     smiles = [str(s) for s in smiles]
+    if not smiles:
+        raise ValueError("No molecules to explain.")
     ids = [str(i) for i in ids] if ids is not None else [f"mol_{i:04d}" for i in range(len(smiles))]
     if len(ids) != len(smiles):
         raise ValueError(f"{len(ids)} ids for {len(smiles)} molecules: pass one id per molecule.")
@@ -552,7 +568,7 @@ def _parse(smiles, ids, display):
     """RDKit molecules (None where unparseable); refuses an input where nothing parses."""
     from rdkit import Chem
 
-    mols = [Chem.MolFromSmiles(s) for s in smiles]
+    mols = [m if m is not None and m.GetNumAtoms() else None for m in map(Chem.MolFromSmiles, smiles)]
     invalid = [ids[i] for i, m in enumerate(mols) if m is None]
     if len(invalid) == len(smiles):
         raise ValueError("None of the SMILES could be parsed; nothing to explain.")
@@ -611,6 +627,8 @@ def predict(model, smiles, output=None, details=False, display=SILENT):
         ``smiles``, ``valid``, then P per column on the teacher's scale (NaN for unparseable SMILES).
     """
     model = _load(model)
+    if output is not None:
+        Path(output).parent.mkdir(parents=True, exist_ok=True)  # before the work, not after it
     df = model.predict(list(smiles), details=details, display=display)
     if output is not None:
         df.to_csv(output, index=False)

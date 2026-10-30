@@ -1,7 +1,8 @@
 # Python API
 
 Each command is a function in `xai4chem.api`, also importable from `xai4chem`. The functions print
-nothing; pass `display=xai4chem.ui.console.ConsoleDisplay()` to see the CLI's progress output.
+nothing; pass `display=xai4chem.ui.console.ConsoleDisplay()` to see the CLI's progress output (worth doing
+the first time: `fit` downloads the 0.5 GB reference library if it is not there yet).
 
 ```python
 import xai4chem

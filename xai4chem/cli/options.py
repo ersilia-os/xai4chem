@@ -69,7 +69,7 @@ def friendly_errors(func):
         """Turn expected failures into a one-line click error instead of a traceback."""
         try:
             return func(*args, **kwargs)
-        except (FileNotFoundError, ValueError, KeyError, RuntimeError) as exc:
+        except (OSError, ValueError, KeyError, RuntimeError) as exc:
             message = exc.args[0] if isinstance(exc, KeyError) and exc.args else str(exc)
             raise click.ClickException(str(message)) from exc
 

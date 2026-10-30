@@ -13,7 +13,7 @@ Follows Olinda's conventions, so the same files work for both tools:
 
 from pathlib import Path
 
-SMILES_NAMES = ("smiles", "input")
+SMILES_NAMES = ("smiles", "input", "canonical_smiles", "isomeric_smiles", "smi")
 ID_NAMES = ("id", "name", "key", "compound_id", "molecule")
 HARD_SEPARATORS = ("_", "-")
 
@@ -95,8 +95,16 @@ def read_labels(path, smiles_col=None, label_cols=None, flag=None):
         tasks = [
             c for c in df.columns[after:] if pd.api.types.is_numeric_dtype(df[c]) and not str(c).startswith("Unnamed:")
         ]
+        skipped = [c for c in df.columns[after:] if c not in tasks and not str(c).startswith("Unnamed:")]
+        if skipped:  # e.g. a stray "ND" or "<10" turns a measurement column into text
+            from xai4chem.ui.log import logger
+
+            logger.warning(f"Ignoring non-numeric column(s) of {path}: {', '.join(map(str, skipped))}")
     if not tasks:
-        raise ValueError(f"{path} has no numeric label columns besides the SMILES column {sc!r}.")
+        raise ValueError(
+            f"{path} has no numeric label columns after the SMILES column {sc!r} (labels are the numeric columns "
+            "to its right)."
+        )
     return df[sc].astype(str).tolist(), df[tasks].reset_index(drop=True)
 
 

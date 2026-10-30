@@ -16,6 +16,7 @@ import os
 import time
 from collections import Counter
 from datetime import datetime, timezone
+from http.client import HTTPException
 from pathlib import Path
 from urllib.parse import urlparse
 from urllib.request import urlopen
@@ -47,6 +48,7 @@ DATAMOL_FIT_MOLS = 20_000
 TOP_FRAGMENTS = 10
 CHUNK = 5_000
 DOWNLOAD_BLOCK = 1 << 20
+DOWNLOAD_TIMEOUT = 60  # seconds without data before a download is given up on
 
 
 def library_url():
@@ -246,7 +248,7 @@ def publish_manifest(library_dir):
 def _fetch(url, dest, size, display, label):
     tmp = Path(str(dest) + ".tmp")
     try:
-        with urlopen(url) as response, open(tmp, "wb") as out:
+        with urlopen(url, timeout=DOWNLOAD_TIMEOUT) as response, open(tmp, "wb") as out:
             with display.loop(f"downloading {label} (MB)", max(1, size // 1_000_000)) as tick:
                 done = 0
                 for block in iter(lambda: response.read(DOWNLOAD_BLOCK), b""):
@@ -254,6 +256,11 @@ def _fetch(url, dest, size, display, label):
                     done += len(block)
                     tick(done // 1_000_000)
         tmp.replace(dest)
+    except (OSError, HTTPException) as exc:  # a dropped or stalled connection
+        tmp.unlink(missing_ok=True)
+        raise RuntimeError(
+            f"Downloading {label} failed ({exc}). Run the command again: files already downloaded are kept."
+        ) from exc
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
@@ -265,7 +272,7 @@ def download_library(library_dir, featurizers, display=SILENT):
     library_dir.mkdir(parents=True, exist_ok=True)
     base = library_url()
     try:
-        with urlopen(f"{base}/{LIBRARY_JSON}") as response:
+        with urlopen(f"{base}/{LIBRARY_JSON}", timeout=DOWNLOAD_TIMEOUT) as response:
             remote = json.loads(response.read())
     except OSError as exc:  # urllib's HTTPError and URLError are OSErrors
         unpublished = getattr(exc, "code", None) in (403, 404)

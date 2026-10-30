@@ -42,6 +42,10 @@ optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/mi
   time, so `setup` is only needed to export the SMILES to score; `python -m xai4chem` runs the CLI; `fit --help`
   groups its options into inputs, features and advanced; `fit` gains `--soft-columns` and `--max-samples`, as in
   Olinda.
+- Safer `fit`: inputs are checked before the first-run download and before `--force` removes the old model; a
+  failed fit removes only what it wrote (never a shared `models/` folder); a dropped download says so and
+  can be re-run; `predict -o new/dir/out.csv` makes the folder first; an empty SMILES is unparseable;
+  non-numeric label columns are named in a warning; `canonical_smiles` is recognised as the SMILES column.
 - Faster reports: importing stylia no longer deletes matplotlib's font cache, which made every report spend ~10 s
   re-scanning the system fonts (a report now takes ~2 s). It also no longer wipes that cache for other programs.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.

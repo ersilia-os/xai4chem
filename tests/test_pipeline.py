@@ -480,3 +480,48 @@ def test_soft_columns_and_max_samples_narrow_a_fit(library, tmp_path):
     assert model.column_names == ["noisy"]
     assert len(np.load(model.column("noisy").dir / "fidelity.npz")["teacher"]) <= 300  # trained on 300 rows
     fails(args + ["-m", tmp_path / "two", "--soft-columns", "nope"], "not found")
+
+
+def test_a_failed_fit_leaves_other_files_and_a_forced_model_alone(library, tmp_path):
+    root, lib = library
+    args = ["fit", "-s", root / "soft.csv", "--library-dir", lib, "--n-estimators", "30", "--no-report"]
+    # A directory that already holds other things keeps them when the fit fails
+    shared = tmp_path / "models"
+    (shared / "other_model").mkdir(parents=True)
+    (shared / "other_model" / "manifest.json").write_text("{}")
+    bad = pd.read_csv(root / "soft.csv")
+    bad["activity"] = 1.0  # constant: refused
+    bad.to_csv(tmp_path / "constant.csv", index=False)
+    fails(["fit", "-s", tmp_path / "constant.csv", "--library-dir", lib, "-m", shared], "constant")
+    assert (shared / "other_model" / "manifest.json").exists()
+    # --force does not destroy the old model if the new inputs are refused
+    run(args + ["-m", tmp_path / "keep"])
+    fails(args + ["-m", tmp_path / "keep", "--force", "--soft-columns", "typo"], "not found")
+    assert XAIModel(tmp_path / "keep").column_names == ["activity", "noisy"]
+
+
+def test_input_edge_cases(library, tmp_path):
+    from xai4chem.models.model import valid_mask
+
+    root, lib = library
+    assert valid_mask(["CCO", "", "notasmiles"]).tolist() == [True, False, False]
+    run(
+        [
+            "fit",
+            "-s",
+            root / "soft.csv",
+            "--library-dir",
+            lib,
+            "--n-estimators",
+            "30",
+            "--no-report",
+            "-m",
+            tmp_path / "m",
+        ]
+    )
+    run(["predict", "-m", tmp_path / "m", "-S", "CCO", "-o", tmp_path / "new" / "dir" / "p.csv"])  # makes its folder
+    assert (tmp_path / "new" / "dir" / "p.csv").exists()
+    pd.DataFrame({"id": [1], "canonical_smiles": ["CCO"]}).to_csv(tmp_path / "c.csv", index=False)
+    run(["predict", "-m", tmp_path / "m", "-i", tmp_path / "c.csv", "-o", tmp_path / "p2.csv"])
+    pd.DataFrame({"smiles": []}).to_csv(tmp_path / "empty.csv", index=False)
+    fails(["explain", "-m", tmp_path / "m", "-i", tmp_path / "empty.csv"], "No molecules to explain")

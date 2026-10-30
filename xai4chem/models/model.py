@@ -67,8 +67,9 @@ def _nothing():
 
 
 def valid_mask(smiles):
-    """True for each SMILES RDKit can parse."""
-    return np.array([Chem.MolFromSmiles(s) is not None for s in smiles], dtype=bool)
+    """True for each SMILES RDKit can parse into a molecule with atoms."""
+    mols = map(Chem.MolFromSmiles, smiles)
+    return np.array([m is not None and m.GetNumAtoms() > 0 for m in mols], dtype=bool)  # '' parses, to nothing
 
 
 class HardHead(object):

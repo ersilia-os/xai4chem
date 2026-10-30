@@ -36,7 +36,7 @@ def test_an_unpublished_library_says_so(tmp_path, monkeypatch):
 
     from xai4chem.data import build
 
-    def forbidden(url):
+    def forbidden(url, timeout=None):
         raise HTTPError(url, 403, "Forbidden", None, None)
 
     monkeypatch.setattr(build, "urlopen", forbidden)
