@@ -20,28 +20,35 @@ Ersilia library is built the same way by `scripts/build_reference_library.py`.
 
 | Model | Time | Peak RAM |
 |---|---|---|
-| datamol (the default), soft + 3,000 hard labels | 1 min 42 s | — |
-| Morgan, soft only | 2 min 23 s | 2.6 GB |
-| Morgan, soft + 3,000 hard labels | 2 min 11 s | 2.6 GB |
-| AccFG, soft + 3,000 hard labels | 1 min 42 s | — |
+| Morgan, soft only | 1 min 30 s | 4.3 GB |
+| Morgan, soft + 3,000 hard labels | 2 min 11 s* | 3.3 GB |
+| AccFG, soft + 3,000 hard labels | 1 min 42 s* | 1.5 GB |
+| datamol (the default), soft + 3,000 hard labels | 1 min 42 s* | 1.4 GB |
 
-Each fit includes the global explanations (2,000 panel molecules, ~20 s with a hard head) and the report.
+Each fit includes the global explanations (2,000 panel molecules, 6 to 25 s) and the report (~2 s).
+About 90% of the time is XGBoost boosting 2,000 trees (about 31 ms per round, plus 7 ms to score the
+validation split after each one); reading the labels, matching them to the library and loading features
+take about 10 s.
+
+\* Timed earlier on the same machine, before the Olinda alignment; not re-timed. The Morgan soft-only row was
+timed on 1.1.0 on an idle machine. Peak RAM and fidelity were re-measured on 1.1.0 while the machine was busy
+with other work, so no wall-clock time is quoted from those runs.
 
 Notes:
 - Training runs on sparse matrices whose zeros are missing (only ~3% of entries are nonzero).
 - The validation split is a plain `DMatrix`. A `QuantileDMatrix` eval set made each round 20× slower in
   XGBoost 2.0, because its predictions are not cached.
 
-The whole example (`example/run.sh`) takes 4 min 16 s once the library is downloaded: a Morgan fit, an AccFG fit
+The whole example (`example/run.sh`) took 4 min 16 s (timed before the Olinda alignment) once the library is downloaded: a Morgan fit, an AccFG fit
 with hard labels, explanations, a two-molecule comparison and predictions.
 
 ## Fidelity to the teacher (held-out library molecules)
 
 | Featurizer | R² | Spearman ρ |
 |---|---|---|
-| Morgan | 0.934 | 0.970 |
-| AccFG | 0.842 | 0.921 |
-| datamol | 0.998 | 1.000 |
+| Morgan | 0.942 | 0.970 |
+| AccFG | 0.849 | 0.920 |
+| datamol | 0.999 | 1.000 |
 
 The datamol figure is not a fair comparison: datamol's descriptor set includes QED itself, so S simply reads
 it off. For a real teacher, datamol explanations name the physicochemical properties a model leans on.
@@ -50,7 +57,7 @@ Fidelity keeps rising slowly with more trees. On 400k Morgan rows, R² was 0.924
 4,000 and 0.941 at 6,000. Prediction and TreeSHAP cost grow linearly with trees, so 2,000 is the default;
 pass `n_estimators=6000` to `xai4chem.fit` when fidelity matters most.
 
-On 12 marketed drugs (7 of them in the library), the Morgan model reaches R² 0.854 and Spearman ρ 0.986
+On 12 marketed drugs (7 of them in the library), the Morgan model reaches R² 0.835 and Spearman ρ 0.986
 against the teacher.
 
 ## Inference
