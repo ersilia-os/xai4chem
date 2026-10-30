@@ -40,7 +40,8 @@ optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/mi
   and ceiling in `hard_meta.json`, as Olinda does.
 - Plug and play: `fit` sets up Ersilia's reference library itself (or adds a featurizer it lacks) the first
   time, so `setup` is only needed to export the SMILES to score; `python -m xai4chem` runs the CLI; `fit --help`
-  groups its options into inputs, features and advanced.
+  groups its options into inputs, features and advanced; `fit` gains `--soft-columns` and `--max-samples`, as in
+  Olinda.
 - Faster reports: importing stylia no longer deletes matplotlib's font cache, which made every report spend ~10 s
   re-scanning the system fonts (a report now takes ~2 s). It also no longer wipes that cache for other programs.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.

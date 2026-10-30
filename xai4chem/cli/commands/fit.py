@@ -34,6 +34,17 @@ from xai4chem.cli import options
     "Each must match a soft-label column.",
 )
 @click.option(
+    "--soft-columns",
+    default=None,
+    help="Comma-separated columns of the soft-label file to distil (default: every numeric column after `smiles`).",
+)
+@click.option(
+    "--max-samples",
+    default=None,
+    type=click.IntRange(min=1),
+    help="Use only the first N soft-label molecules, for a quick trial run.",
+)
+@click.option(
     "--task",
     default="auto",
     show_default=True,
@@ -73,6 +84,8 @@ def fit_cmd(
     model_dir,
     featurizer,
     hard_columns,
+    soft_columns,
+    max_samples,
     task,
     reweight,
     n_estimators,
@@ -98,7 +111,9 @@ def fit_cmd(
         library_dir,
         force=force,
         seed=seed,
-        hard_columns=[c.strip() for c in hard_columns.split(",") if c.strip()] if hard_columns else None,
+        hard_columns=options.columns_list(hard_columns),
+        soft_columns=options.columns_list(soft_columns),
+        max_samples=max_samples,
         task=task,
         reweight=reweight,
         n_estimators=n_estimators,

@@ -76,6 +76,12 @@ def friendly_errors(func):
     return wrapper
 
 
+def columns_list(text):
+    """The names in a comma-separated option, or None when it was not given."""
+    names = [c.strip() for c in text.split(",") if c.strip()] if text else []
+    return names or None
+
+
 def plural(n, word):
     """``n`` and ``word``, pluralised, for console messages."""
     return f"{n:,} {word}{'' if n == 1 else 's'}"

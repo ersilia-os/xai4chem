@@ -73,6 +73,8 @@ def fit(
     seed=42,
     task="auto",
     hard_columns=None,
+    soft_columns=None,
+    max_samples=None,
     reweight="auto",
     n_estimators=None,
     panel_rows=None,
@@ -101,6 +103,10 @@ def fit(
     hard_columns : sequence of str, optional
         Which columns of the hard-label file to use (default: every numeric column after the SMILES one).
         Each must match a soft-label column.
+    soft_columns : sequence of str, optional
+        Which columns of the soft-label file to distil (default: every numeric column after the SMILES one).
+    max_samples : int, optional
+        Use only the first ``max_samples`` soft-label molecules, for a quick trial run.
     task : str
         Task of the hard labels: ``auto`` (binary if every label is 0 or 1, else regression), ``binary`` or
         ``regression``. Forcing ``binary`` on other values is refused.
@@ -135,7 +141,9 @@ def fit(
         shutil.rmtree(model_dir)
     library = _ready_library(library_dir, featurizer, display)
     feat = library.featurizer(featurizer)
-    smiles, Y = read_labels(soft_labels)
+    smiles, Y = read_labels(soft_labels, label_cols=soft_columns)
+    if max_samples is not None:
+        smiles, Y = smiles[:max_samples], Y.iloc[:max_samples].reset_index(drop=True)
     mapping, hard = _check_hard(hard_labels, hard_columns, task, Y)
     total = 5 if hard_labels is not None else 4
     if not report:

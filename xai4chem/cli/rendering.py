@@ -12,7 +12,16 @@ FIT_PANELS = [
     {"name": "Features", "options": ["--featurizer", "--library-dir"]},
     {
         "name": "Advanced",
-        "options": ["--task", "--reweight", "--hard-columns", "--n-estimators", "--panel-rows", "--seed"],
+        "options": [
+            "--task",
+            "--reweight",
+            "--soft-columns",
+            "--hard-columns",
+            "--max-samples",
+            "--n-estimators",
+            "--panel-rows",
+            "--seed",
+        ],
     },
     {"name": "Behaviour", "options": ["--no-report", "--force", "--help"]},
 ]

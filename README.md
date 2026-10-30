@@ -79,7 +79,7 @@ The input files:
 | Command | What it does |
 |---|---|
 | `setup` | Prepare the reference library once: features, explanation panel, Morgan bit names (`--export-smiles` writes the SMILES to score) |
-| `fit` | Learn S from soft labels and, with `-h`, H from hard labels; explain the library panel; write `report.html`. Options: `--task`, `--reweight`, `--n-estimators`, `--panel-rows`, `--seed`, `--no-report` |
+| `fit` | Learn S from soft labels and, with `-h`, H from hard labels; explain the library panel; write `report.html`. Options: `--task`, `--reweight`, `--soft-columns`, `--hard-columns`, `--max-samples`, `--n-estimators`, `--panel-rows`, `--seed`, `--no-report` |
 | `explain` | Predictions, attributions and an HTML gallery per molecule (`--domain` adds the nearest library molecule) |
 | `predict` | Score molecules fast, without explanations (`--details` adds S, H_S, T and `a`) |
 

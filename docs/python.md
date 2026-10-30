@@ -14,7 +14,7 @@ xai4chem.predict("models/my_model", smiles, "predictions.csv")
 ```
 
 The CLI and the Python API take the same options (a test keeps them aligned): `fit` also takes `task`,
-`reweight`, `seed`, `n_estimators`, `panel_rows` and `report`.
+`reweight`, `soft_columns`, `hard_columns`, `max_samples`, `seed`, `n_estimators`, `panel_rows` and `report`.
 
 A model directory is loaded with `XAIModel`. Loading
 re-scores the model's golden molecules and refuses to continue if this environment does not reproduce them.

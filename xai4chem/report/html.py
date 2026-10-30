@@ -1,7 +1,7 @@
 """Self-contained HTML in the Ersilia house style.
 
 The stylesheet (``assets/ersilia.css``) is the Ersilia design system, inlined into every page, and
-figures are inline SVG, so a report is one file that can be emailed, opened offline or
+molecule drawings are inline SVG and the model report's plots are embedded PNGs, so a report is one file that can be emailed, opened offline or
 published as an Artifact. The pages commit to a single light theme on purpose: the Ersilia brand is light.
 """
 

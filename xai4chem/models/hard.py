@@ -118,7 +118,7 @@ def check_hard_labels(name, y, task):
     else:
         if len(y) < MIN_REGRESSION_ROWS:
             raise ValueError(
-                f"hard column '{name}' has {len(y)} usable row(s); a continuous column needs at least "
+                f"hard column '{name}' has {len(y)} usable row(s); a regression column needs at least "
                 f"{MIN_REGRESSION_ROWS} to learn from. Supply more labels or drop the column."
             )
         if float(np.ptp(y)) == 0.0:

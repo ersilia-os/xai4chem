@@ -470,3 +470,13 @@ def test_fit_sets_up_the_library_when_it_is_missing(library, workspace, tmp_path
     assert ReferenceLibrary(local).has("morgan") and out["columns"]
     api.fit(root / "soft.csv", tmp_path / "m2", featurizer="accfg", library_dir=local, report=False)
     assert ReferenceLibrary(local).has("accfg")  # a missing featurizer is added to the library on the way
+
+
+def test_soft_columns_and_max_samples_narrow_a_fit(library, tmp_path):
+    root, lib = library
+    args = ["fit", "-s", root / "soft.csv", "--library-dir", lib, "--n-estimators", "40", "--no-report"]
+    run(args + ["-m", tmp_path / "one", "--soft-columns", "noisy", "--max-samples", "300"])
+    model = XAIModel(tmp_path / "one")
+    assert model.column_names == ["noisy"]
+    assert len(np.load(model.column("noisy").dir / "fidelity.npz")["teacher"]) <= 300  # trained on 300 rows
+    fails(args + ["-m", tmp_path / "two", "--soft-columns", "nope"], "not found")
