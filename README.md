@@ -47,7 +47,7 @@ pip install git+https://github.com/ersilia-os/xai4chem.git
 ## Quick start
 
 ```bash
-xai4chem setup --export-smiles erl0_smiles.csv      # once; then score this file with your teacher → soft.csv
+xai4chem setup --export-smiles erl0_smiles.csv      # downloads the library; then score this file with your teacher → soft.csv
 xai4chem fit -s soft.csv -m models/my_model         # S on descriptors → global explanations → report.html
 xai4chem fit -s soft.csv -h measurements.csv -f accfg -m models/my_model_fg   # with a hard head (--task auto|binary|regression)
 xai4chem explain -m models/my_model -i molecules.csv                  # → explanations/
@@ -56,7 +56,8 @@ xai4chem predict -m models/my_model -i molecules.csv -o predictions.csv
 ```
 
 `setup` downloads Ersilia's reference library with every feature precomputed: SMILES, Morgan and datamol
-by default (about 0.5 GB), AccFG with `-f accfg` (60 MB more). With your own molecules instead,
+by default (about 0.5 GB), AccFG with `-f accfg` (60 MB more). You only need it to export the SMILES to
+score: `fit` fetches the library, or a featurizer it lacks, on its own the first time. With your own molecules instead,
 `xai4chem setup --library my_smiles.csv -f all` featurizes them locally, once.
 
 `fit` uses datamol descriptors unless told otherwise (`-f morgan` for substructures and atom maps,

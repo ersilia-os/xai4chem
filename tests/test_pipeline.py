@@ -453,3 +453,20 @@ def test_published_library_is_downloaded(library, tmp_path, monkeypatch):
     manifest["files"]["panel.npy"]["sha256"] = "0" * 64
     (remote / "library.json").write_text(json.dumps(manifest))
     fails(["setup", "--library-dir", tmp_path / "other"], "checksum")
+
+
+def test_fit_sets_up_the_library_when_it_is_missing(library, workspace, tmp_path, monkeypatch):
+    """`fit` needs no separate `setup`: it fetches what is missing, then fits."""
+    from xai4chem.data.build import publish_manifest
+
+    root, _ = workspace
+    _, lib = library
+    remote = tmp_path / "bucket"
+    shutil.copytree(lib, remote, ignore=shutil.ignore_patterns("morgan_bits_*"))
+    publish_manifest(remote)
+    monkeypatch.setenv("XAI4CHEM_LIBRARY_URL", str(remote))
+    local = tmp_path / "fresh"
+    out = api.fit(root / "soft.csv", tmp_path / "m", featurizer="morgan", library_dir=local, report=False)
+    assert ReferenceLibrary(local).has("morgan") and out["columns"]
+    api.fit(root / "soft.csv", tmp_path / "m2", featurizer="accfg", library_dir=local, report=False)
+    assert ReferenceLibrary(local).has("accfg")  # a missing featurizer is added to the library on the way

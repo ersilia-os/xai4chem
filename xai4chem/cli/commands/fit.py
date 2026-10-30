@@ -25,7 +25,7 @@ from xai4chem.cli import options
     default="datamol",
     show_default=True,
     type=click.Choice(options.FEATURIZERS),
-    help="Features the surrogate learns from (must be prepared by `xai4chem setup`).",
+    help="Features the surrogate learns from: descriptors, substructures (atom maps) or functional groups.",
 )
 @click.option(
     "--hard-columns",

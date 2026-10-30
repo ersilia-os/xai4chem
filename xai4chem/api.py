@@ -11,7 +11,7 @@ from pathlib import Path
 
 import numpy as np
 
-from xai4chem.progress import SILENT
+from xai4chem.progress import SILENT, Nested
 
 FIDELITY_POINTS = 5000
 GOLDEN_MOLECULES = 8
@@ -124,7 +124,6 @@ def fit(
     """
     from xai4chem.data.features import load_features
     from xai4chem.data.io import read_labels
-    from xai4chem.data.library import ReferenceLibrary
     from xai4chem.models.surrogate import N_ESTIMATORS
     from xai4chem.run import MANIFEST_NAME
 
@@ -134,7 +133,7 @@ def fit(
         if not force:
             raise ValueError(f"{model_dir} already holds a model. Pass --force to overwrite it.")
         shutil.rmtree(model_dir)
-    library = ReferenceLibrary(library_dir)
+    library = _ready_library(library_dir, featurizer, display)
     feat = library.featurizer(featurizer)
     smiles, Y = read_labels(soft_labels)
     mapping, hard = _check_hard(hard_labels, hard_columns, task, Y)
@@ -162,6 +161,23 @@ def fit(
     except BaseException:  # a half-written model would load, soft-only, without a word
         shutil.rmtree(model_dir, ignore_errors=True)
         raise
+
+
+def _ready_library(library_dir, featurizer, display):
+    """The reference library, set up first (Ersilia's, once) if it is missing, outdated or lacks ``featurizer``.
+
+    ``fit`` needs no separate ``setup``: the first run fetches what it needs and says so.
+    """
+    from xai4chem.data.library import ReferenceLibrary
+
+    try:
+        library = ReferenceLibrary(library_dir)
+        if featurizer in library.featurizers:
+            return library
+        display.note(f"the reference library has no {featurizer} features yet; adding them")
+    except (FileNotFoundError, ValueError):  # absent, or written by an older xai4chem
+        display.note("no reference library yet; setting up Ersilia's (once)")
+    return setup(None, ["morgan", featurizer], library_dir, display=Nested(display))
 
 
 def _check_hard(hard_labels, hard_columns, task, Y):

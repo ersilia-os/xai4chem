@@ -54,4 +54,31 @@ class Display(object):
         yield _SilentTable()
 
 
+class Nested(Display):
+    """A display for work done inside another command's step: its own steps become plain notes.
+
+    Keeps the outer command's ``Step i/N`` numbering intact while a download or build it triggered still
+    reports its progress.
+    """
+
+    def __init__(self, parent):
+        self.parent = parent
+
+    def step(self, index, total, title):
+        """The nested stage, as a note under the outer step."""
+        self.parent.note(title)
+
+    def note(self, text, kind="info"):
+        """Passed on unchanged."""
+        self.parent.note(text, kind)
+
+    def loop(self, verb, total):
+        """Passed on unchanged."""
+        return self.parent.loop(verb, total)
+
+    def table(self, items, title, fields):
+        """Passed on unchanged."""
+        return self.parent.table(items, title, fields)
+
+
 SILENT = Display()

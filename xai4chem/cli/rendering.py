@@ -5,6 +5,18 @@ import rich_click.rich_click as rc
 
 COMMAND_PANELS = [{"name": "Commands", "commands": ["setup", "fit", "explain", "predict"]}]
 
+# Programme names the group may be invoked as: `xai4chem`, or through `python -m xai4chem`
+PROGRAMS = ["xai4chem", "main", "cli"]
+FIT_PANELS = [
+    {"name": "Inputs and output", "options": ["--soft-labels", "--hard-labels", "--model-dir"]},
+    {"name": "Features", "options": ["--featurizer", "--library-dir"]},
+    {
+        "name": "Advanced",
+        "options": ["--task", "--reweight", "--hard-columns", "--n-estimators", "--panel-rows", "--seed"],
+    },
+    {"name": "Behaviour", "options": ["--no-report", "--force", "--help"]},
+]
+
 
 def configure_help():
     """Apply the styling and the command panel. Safe to call more than once."""
@@ -17,5 +29,5 @@ def configure_help():
     rc.STYLE_SWITCH = "underline cyan"
     rc.STYLE_USAGE = "bold blue"
     rc.STYLE_OPTION_DEFAULT = "dim italic"
-    # Keyed by program name; it may be invoked as `xai4chem` or through `python -m`
-    rc.COMMAND_GROUPS = {"xai4chem": COMMAND_PANELS, "main": COMMAND_PANELS, "cli": COMMAND_PANELS}
+    rc.COMMAND_GROUPS = {program: COMMAND_PANELS for program in PROGRAMS}
+    rc.OPTION_GROUPS = {f"{program} fit": FIT_PANELS for program in PROGRAMS}

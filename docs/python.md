@@ -7,7 +7,7 @@ nothing; pass `display=xai4chem.ui.console.ConsoleDisplay()` to see the CLI's pr
 import xai4chem
 
 smiles = ["CC(=O)Nc1ccc(O)cc1", "CC(C)Cc1ccc(cc1)C(C)C(=O)O"]
-xai4chem.setup()                                                  # as `xai4chem setup`
+xai4chem.setup()                                                  # as `xai4chem setup` (optional: `fit` does it)
 xai4chem.fit("soft.csv", "models/my_model", hard_labels="hard.csv")
 out = xai4chem.explain("models/my_model", smiles, "explanations/") # predictions, attributions, gallery
 xai4chem.predict("models/my_model", smiles, "predictions.csv")

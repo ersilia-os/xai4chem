@@ -31,7 +31,7 @@ def cli(verbose):
     molecule (atoms, substructures, functional groups) and across the library.
 
     Typical run: [green]xai4chem setup --export-smiles library.csv[/] → score it with your teacher →
-    [green]xai4chem fit[/] → [green]xai4chem explain[/].
+    [green]xai4chem fit[/] → [green]xai4chem explain[/]. Every command also runs as [green]python -m xai4chem[/].
     """
     if verbose:
         from xai4chem.ui.log import set_verbose
