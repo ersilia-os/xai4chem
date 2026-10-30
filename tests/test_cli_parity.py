@@ -40,7 +40,13 @@ MAP = {
         "ids": None,  # read from the input file's id column
         "domain": "domain",
     },
-    "predict": {"model": "model_dir", "smiles": "smiles_list", "output": "output", "details": "details"},
+    "predict": {
+        "model": "model_dir",
+        "smiles": "smiles_list",
+        "output": "output",
+        "details": "details",
+        "ids": None,  # read from the input file's id column
+    },
 }
 NOT_OPTIONS = {"display"}  # the CLI passes its own console
 

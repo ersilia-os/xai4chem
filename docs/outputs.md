@@ -79,5 +79,5 @@ molecule. Both molecules are drawn on one colour scale.
 
 ## Fast predictions (`xai4chem predict`)
 
-`predict` skips attributions, so it scores millions of molecules. It writes `smiles` and `valid`, then P per
+`predict` skips attributions, so it scores millions of molecules. It writes `id` (when the input has an id column), `smiles` and `valid`, then P per
 column on the teacher's scale. From Python, `predict(..., details=True)` also gives S, H_S, T and `a`.

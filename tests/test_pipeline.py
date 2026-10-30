@@ -521,7 +521,8 @@ def test_input_edge_cases(library, tmp_path):
     )
     run(["predict", "-m", tmp_path / "m", "-S", "CCO", "-o", tmp_path / "new" / "dir" / "p.csv"])  # makes its folder
     assert (tmp_path / "new" / "dir" / "p.csv").exists()
-    pd.DataFrame({"id": [1], "canonical_smiles": ["CCO"]}).to_csv(tmp_path / "c.csv", index=False)
+    pd.DataFrame({"id": ["a1"], "canonical_smiles": ["CCO"]}).to_csv(tmp_path / "c.csv", index=False)
     run(["predict", "-m", tmp_path / "m", "-i", tmp_path / "c.csv", "-o", tmp_path / "p2.csv"])
+    assert pd.read_csv(tmp_path / "p2.csv").iloc[0].id == "a1"  # the input's id column comes along
     pd.DataFrame({"smiles": []}).to_csv(tmp_path / "empty.csv", index=False)
     fails(["explain", "-m", tmp_path / "m", "-i", tmp_path / "empty.csv"], "No molecules to explain")

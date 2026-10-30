@@ -240,6 +240,9 @@ def _read_soft(smiles, Y, library, feat, display):
         display.note(f"{len(bad):,} soft-label SMILES could not be parsed and are left out", "warning")
         keep = np.setdiff1d(np.arange(len(smiles)), bad)
         smiles, rows, Y = [smiles[i] for i in keep], rows[keep], Y.iloc[keep].reset_index(drop=True)
+    repeats = len(smiles) - len(set(smiles))
+    if repeats:  # the same molecule can then sit in both the training and the validation split
+        display.note(f"{_plural(repeats, 'soft-label SMILES')} repeat an earlier row; they are kept", "warning")
     for name in Y.columns:  # refuse an unlearnable column now, before any work (Olinda's checks)
         for warning in check_target(str(name), Y[name].to_numpy(dtype=np.float64)):
             display.note(warning, "warning")
@@ -605,7 +608,7 @@ def _neighbour(neighbours, k):
 # --- predict ----------------------------------------------------------------------------------------
 
 
-def predict(model, smiles, output=None, details=False, display=SILENT):
+def predict(model, smiles, output=None, details=False, ids=None, display=SILENT):
     """Score molecules without explanations; millions are fine.
 
     Parameters
@@ -618,18 +621,24 @@ def predict(model, smiles, output=None, details=False, display=SILENT):
         A CSV to write the table to.
     details : bool
         Also give S and, with a hard head, H_S, T and ``a`` per column.
+    ids : sequence of str, optional
+        A name per molecule, written as a leading ``id`` column.
     display : xai4chem.progress.Display
         Where progress goes; silent by default, ``ConsoleDisplay`` for the CLI's output.
 
     Returns
     -------
     pandas.DataFrame
-        ``smiles``, ``valid``, then P per column on the teacher's scale (NaN for unparseable SMILES).
+        ``id`` (if given), ``smiles``, ``valid``, then P per column on the teacher's scale (NaN for unparseable SMILES).
     """
     model = _load(model)
     if output is not None:
         Path(output).parent.mkdir(parents=True, exist_ok=True)  # before the work, not after it
     df = model.predict(list(smiles), details=details, display=display)
+    if ids is not None:
+        if len(ids) != len(df):
+            raise ValueError(f"{len(ids)} ids for {len(df)} molecules: pass one id per molecule.")
+        df.insert(0, "id", [str(i) for i in ids])
     if output is not None:
         df.to_csv(output, index=False)
     return df

@@ -137,6 +137,8 @@ def match_hard_columns(soft_columns, hard_columns, strict=True):
         claimed[target] = hard
     if problems:
         raise ValueError(
-            "could not align hard labels with soft labels:\n  - " + "\n  - ".join(problems) + f"\nsoft columns: {soft}"
+            "could not align hard labels with soft labels:\n  - "
+            + "\n  - ".join(problems)
+            + f"\nsoft columns: {soft}\nPick the measurement columns to use with --hard-columns (hard_columns=)."
         )
     return mapping
