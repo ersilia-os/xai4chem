@@ -144,6 +144,10 @@ def fit(
     for name in Y.columns:
         check_target(str(name), Y[name].to_numpy(dtype=np.float64))
     mapping, hard = _check_hard(hard_labels, hard_columns, task, Y)
+    if report:
+        from xai4chem.report.style import require_stylia
+
+        require_stylia()
     library = _ready_library(library_dir, featurizer, display)
     feat = library.featurizer(featurizer)
     total = 5 if hard_labels is not None else 4

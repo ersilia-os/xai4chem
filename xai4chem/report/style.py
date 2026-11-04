@@ -28,6 +28,24 @@ ROLES = {
 }
 
 
+def require_stylia():
+    """Refuse early, with the fix, when stylia is missing, so a fit is not lost to a report it cannot draw.
+
+    Raises
+    ------
+    RuntimeError
+        If stylia is not installed (an editable install made before it became a dependency, for instance).
+    """
+    from importlib.util import find_spec
+
+    if find_spec("stylia") is None:
+        raise RuntimeError(
+            "The report needs stylia, which is not installed in this environment. Run "
+            "`pip install stylia==1.0.1` (or `pip install -e .` again from the repository), or pass --no-report "
+            "to fit without it."
+        )
+
+
 def import_stylia():
     """Import stylia in the report's style and format, with a headless matplotlib.
 

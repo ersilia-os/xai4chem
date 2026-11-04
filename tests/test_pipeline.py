@@ -527,3 +527,17 @@ def test_input_edge_cases(library, tmp_path):
     assert pd.read_csv(tmp_path / "p2.csv").iloc[0].id == "a1"  # the input's id column comes along
     pd.DataFrame({"smiles": []}).to_csv(tmp_path / "empty.csv", index=False)
     fails(["explain", "-m", tmp_path / "m", "-i", tmp_path / "empty.csv"], "No molecules to explain")
+
+
+def test_fit_refuses_early_when_the_report_cannot_be_drawn(library, tmp_path, monkeypatch):
+    """A missing stylia is found before training, so a long fit is not lost to a report it cannot draw."""
+    import importlib.util
+
+    root, lib = library
+    real = importlib.util.find_spec
+    monkeypatch.setattr(importlib.util, "find_spec", lambda name, *a: None if name == "stylia" else real(name, *a))
+    fails(["fit", "-s", root / "soft.csv", "--library-dir", lib, "-m", tmp_path / "m"], "pip install stylia")
+    assert not (tmp_path / "m").exists()
+    # without a report there is nothing to draw, so the fit goes ahead
+    api.fit(root / "soft.csv", tmp_path / "m", library_dir=lib, n_estimators=30, report=False)
+    assert (tmp_path / "m" / "manifest.json").exists()
