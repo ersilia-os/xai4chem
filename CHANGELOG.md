@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.1.1
+
+- Plug and play: `fit` sets up Ersilia's reference library itself (or adds a featurizer it lacks) the first
+  time, so `setup` is only needed to export the SMILES to score; `python -m xai4chem` runs the CLI; `fit --help`
+  groups its options into inputs, features and advanced; `fit` gains `--soft-columns` and `--max-samples`, as in
+  Olinda.
+- Safer `fit`: inputs are checked before the first-run download and before `--force` removes the old model; a
+  failed fit removes only what it wrote (never a shared `models/` folder); a dropped download says so and
+  can be re-run; `predict -o new/dir/out.csv` makes the folder first; an empty SMILES is unparseable;
+  non-numeric label columns are named in a warning; `canonical_smiles` is recognised as the SMILES column.
+- Faster reports: importing stylia no longer deletes matplotlib's font cache, which made every report spend ~10 s
+  re-scanning the system fonts (a report now takes ~2 s). It also no longer wipes that cache for other programs.
+- `predict` carries the input's `id` column into its output; the `prob` output key is gone (use `P`); a
+  hard/soft column mismatch points to `--hard-columns`; repeated soft-label SMILES are noted; an unpublished
+  reference library says so.
+
 ## 1.1.0
 
 A rewrite around the logic of [Olinda](https://github.com/ersilia-os/olinda). xai4chem now explains a
@@ -38,16 +54,6 @@ optionally refines it with hard labels. See [docs/migrating-from-1.0.md](docs/mi
   model; `predict` on no molecules and `explain` with the wrong number of ids give clear errors.
 - Re-checked against Olinda 1.4.0 (continuous hard labels, label scaling): the hard head records its `label_scale`
   and ceiling in `hard_meta.json`, as Olinda does.
-- Plug and play: `fit` sets up Ersilia's reference library itself (or adds a featurizer it lacks) the first
-  time, so `setup` is only needed to export the SMILES to score; `python -m xai4chem` runs the CLI; `fit --help`
-  groups its options into inputs, features and advanced; `fit` gains `--soft-columns` and `--max-samples`, as in
-  Olinda.
-- Safer `fit`: inputs are checked before the first-run download and before `--force` removes the old model; a
-  failed fit removes only what it wrote (never a shared `models/` folder); a dropped download says so and
-  can be re-run; `predict -o new/dir/out.csv` makes the folder first; an empty SMILES is unparseable;
-  non-numeric label columns are named in a warning; `canonical_smiles` is recognised as the SMILES column.
-- Faster reports: importing stylia no longer deletes matplotlib's font cache, which made every report spend ~10 s
-  re-scanning the system fonts (a report now takes ~2 s). It also no longer wipes that cache for other programs.
 - Fix: the datamol featurizer no longer writes into a read-only array under pandas 3.
 
 **Models**
