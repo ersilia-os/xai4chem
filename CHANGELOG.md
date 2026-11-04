@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.2
+
+- `example/` mirrors Olinda's: one `run.sh` with named columns and a `check` mode (`--max-samples`), and a
+  README saying what each step gives you and where to look. Reference library published, so the default
+  `setup` works.
+
 ## 1.1.1
 
 - Plug and play: `fit` sets up Ersilia's reference library itself (or adds a featurizer it lacks) the first

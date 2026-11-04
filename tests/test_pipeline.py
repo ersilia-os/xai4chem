@@ -361,8 +361,9 @@ def test_empty_input_is_refused_clearly(fitted):
         api.explain(model_dir, ["CCO", "CCN"], ids=["only_one"])
 
 
-def test_friendly_refusals(library, tmp_path):
+def test_friendly_refusals(library, tmp_path, monkeypatch):
     root, lib = library
+    monkeypatch.setenv("XAI4CHEM_LIBRARY_URL", str(tmp_path / "nowhere"))  # never the network
     soft = pd.read_csv(root / "soft.csv")
     soft.assign(smiles=[f"CMP{i}" for i in range(len(soft))]).rename(columns={"smiles": "compound_id"}).to_csv(
         tmp_path / "no_smiles.csv", index=False
@@ -382,7 +383,7 @@ def test_friendly_refusals(library, tmp_path):
     fails(["setup", "--library", tmp_path / "no_smiles.csv", "--library-dir", lib], "already holds the library")
     fails(["explain", "-m", tmp_path / "nope", "-S", "CCO"], "Train one with")
     fails(["predict", "-m", tmp_path / "nope", "-S", "CCO", "-i", root / "soft.csv"], "not both")
-    fails(["fit", "-s", root / "soft.csv", "--library-dir", tmp_path / "none", "-m", tmp_path / "c"], "xai4chem setup")
+    fails(["fit", "-s", root / "soft.csv", "--library-dir", tmp_path / "none", "-m", tmp_path / "c"], "Could not")
 
 
 def test_all_invalid_smiles_is_refused(fitted, tmp_path):
