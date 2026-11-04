@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.3
+
+- `fit` checks that stylia is installed before training, and says how to fix it (or to pass `--no-report`),
+  instead of failing at the report step and discarding the fitted model.
+
 ## 1.1.2
 
 - `example/` mirrors Olinda's: one `run.sh` with named columns and a `check` mode (`--max-samples`), and a
