@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.4
+
+- `example/run.sh datamol` fits and explains a descriptor-level model of QED (combine with `check`).
+
 ## 1.1.3
 
 - `fit` checks that stylia is installed before training, and says how to fix it (or to pass `--no-report`),

@@ -4,7 +4,7 @@ Heavy dependencies (xgboost, rdkit) are imported lazily, so that ``xai4chem --he
 ``import xai4chem`` stay fast.
 """
 
-__version__ = "1.1.3"
+__version__ = "1.1.4"
 
 _LAZY = {
     "setup": "xai4chem.api",
