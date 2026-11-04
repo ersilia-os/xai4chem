@@ -6,8 +6,9 @@ script, `run.sh`, with a quick `check` mode.
 
 ```bash
 pip install xai4chem
-./run.sh check    # 50k soft labels, a couple of minutes
-./run.sh          # the whole reference library (1.36M soft labels)
+./run.sh check            # 50k soft labels, a couple of minutes
+./run.sh                  # the whole reference library (1.36M soft labels)
+./run.sh datamol          # only the datamol descriptors model (combine: ./run.sh check datamol)
 ```
 
 The first run downloads Ersilia's reference library and scores it with QED (`make_qed_teacher.py`, a few
@@ -22,6 +23,7 @@ minutes). Later runs reuse both.
 | Gallery | `explain -i drugs.csv` | atom maps and feature tables for 12 drugs, in one page |
 | Comparison | `explain -S ... -S ...` | ibuprofen against its amide, the gap split feature by feature |
 | Scores | `predict` | the teacher's values as the surrogate sees them |
+| Datamol model | `./run.sh datamol` | `fit -f datamol` and an `explain`, in `results/qed_datamol/` and `results/explanations_datamol/` |
 
 The hard labels deliberately disagree with the teacher on one point:
 - labelled 1 when `qed > 0.65`;
@@ -41,6 +43,8 @@ Everything lands in `results/` (`results/check/` for `check`):
   disagreement atom maps, plus `attributions.csv` and `predictions.csv`.
 - `ibuprofen_vs_amide/`: the two-molecule comparison.
 - `predictions.csv`: the scores.
+- `qed_datamol/`, `explanations_datamol/` (only with `./run.sh datamol`): the descriptor-level model. QED is itself
+  a datamol descriptor, so it fits almost perfectly (R² ~0.999) and `qed` dominates its explanations.
 
 [docs/benchmarks.md](../docs/benchmarks.md) has the timings and what to expect; [docs/outputs.md](../docs/outputs.md)
 describes every file.

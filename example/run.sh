@@ -4,6 +4,9 @@
 #
 #   ./run.sh          the real thing: learn from all 1.36M soft labels
 #   ./run.sh check    a quick plumbing check: 50k soft labels, a couple of minutes
+#   ./run.sh datamol  only the datamol descriptors model, to check what drives QED in descriptor terms
+#
+# The options combine: `./run.sh check datamol`.
 #
 # Needs `pip install xai4chem`. The first run downloads Ersilia's reference library (~0.6 GB) and scores
 # it with QED (a few minutes); later runs reuse both. Inputs are read from data/ and drugs.csv, and
@@ -28,19 +31,23 @@ HARD_COL=qed                 # the measured column, in HARD (same name, so it re
 
 OUT=results
 SAMPLE_ARG=""
+DATAMOL_ONLY=0
 
-case "${1:-}" in
-  "")
-    ;;
-  check)
-    OUT=results/check
-    SAMPLE_ARG="--max-samples 50000"
-    ;;
-  *)
-    echo "usage: $0 [check]" >&2
-    exit 1
-    ;;
-esac
+for arg in "$@"; do
+  case "$arg" in
+    check)
+      OUT=results/check
+      SAMPLE_ARG="--max-samples 50000"
+      ;;
+    datamol)
+      DATAMOL_ONLY=1
+      ;;
+    *)
+      echo "usage: $0 [check] [datamol]" >&2
+      exit 1
+      ;;
+  esac
+done
 
 # Score the library with the teacher once. It needs the library, so fetch it first (fit would do it too).
 if [[ ! -s "$SOFT" || ! -s "$HARD" ]]; then
@@ -49,6 +56,15 @@ if [[ ! -s "$SOFT" || ! -s "$HARD" ]]; then
 fi
 
 mkdir -p "$OUT"
+
+if [[ "$DATAMOL_ONLY" == 1 ]]; then
+  # Datamol: descriptor-level explanations. QED is itself one of datamol's descriptors, so the surrogate should
+  # be near-perfect (R² ~0.999) and `qed` itself should dominate the explanations, with `mw` a distant second.
+  # shellcheck disable=SC2086
+  xai4chem fit -s "$SOFT" --soft-columns "$SOFT_COL" -f datamol -m "$OUT/qed_datamol" --force $SAMPLE_ARG
+  xai4chem explain -m "$OUT/qed_datamol" -i "$DRUGS" -o "$OUT/explanations_datamol"
+  exit 0
+fi
 
 # Morgan: substructure-level explanations, soft labels only
 # shellcheck disable=SC2086
